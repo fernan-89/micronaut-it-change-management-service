@@ -23,15 +23,21 @@ micronaut:
   # ----------------------------------------------------------------------------------------------
   # /**
   #  * @subsection  Declarative HTTP Clients (Micronaut Service Discovery)
-  #  * @description Binds the @Client(id = "hash-service") declarative client used by
-  #  *              HashServiceAdapter to the actual Hash Token Registry base URL. Without this
-  #  *              binding, Micronaut cannot resolve a target host for the client at runtime.
+  #  * @description Binds the @Client(id = "...") declarative clients used by HashServiceAdapter,
+  #  *              WorkflowApprovalServiceAdapter (ADR-032: synchronous approval/decision capture)
+  #  *              and OperationWindowServiceAdapter (ADR-033: implementation-window reservation,
+  #  *              reusing its existing collision detection) to their actual base URLs. Without
+  #  *              these bindings, Micronaut cannot resolve a target host at runtime.
   #  */
   # ----------------------------------------------------------------------------------------------
   http:
     services:
       hash-service:
         url: ${HASH_SERVICE_URL:`http://localhost:8080`}
+      workflow-approval-service:
+        url: ${WORKFLOW_APPROVAL_SERVICE_URL:`http://localhost:8090`}
+      operation-window-service:
+        url: ${OPERATION_WINDOW_SERVICE_URL:`http://localhost:8084`}
 
   # ----------------------------------------------------------------------------------------------
   # /**
@@ -171,11 +177,20 @@ thinklab:
     client-secret: ${THINKLAB_CLIENT_SECRET:}
 
   # ----------------------------------------------------------------------------------------------
-  # Event backbone (kit ADR-003). This service is a consumer only, of it-hardware-maintenance's
-  # repair-started/repair-completed events (ADR-034 of that service) - it moves the affected ChangeRequest
-  # into/out of MAINTENANCE via the existing ControlChangeRequestUseCase, never a new ChangeRequest domain method.
-  # Off by default; set THINKLAB_EVENTS_ENABLED=true to consume from NATS JetStream locally.
+  # Event backbone (kit ADR-003). This service publishes and consumes no events - both cross-service
+  # integrations (workflow-approval, operation-window) are synchronous HTTP instead (ADR-032). This
+  # block stays present only because the kit's OutboxRelay/NatsConnectionFactory beans exist
+  # unconditionally, gated by this same property; it must remain false here.
   # ----------------------------------------------------------------------------------------------
   events:
     enabled: ${THINKLAB_EVENTS_ENABLED:false}
     nats-url: ${THINKLAB_EVENTS_NATS_URL:`nats://localhost:4222`}
+
+  # ----------------------------------------------------------------------------------------------
+  # Change Management: which ApprovalPolicy (owned by workflow-approval-service) a NORMAL vs.
+  # EMERGENCY change is routed to (ADR-032). STANDARD changes skip approval entirely (pre-approved
+  # template, ADR-031 of this service). These are operator-provisioned UUIDs, not defaultable.
+  # ----------------------------------------------------------------------------------------------
+  change-management:
+    cab-policy-id: ${THINKLAB_CAB_POLICY_ID:}
+    ecab-policy-id: ${THINKLAB_ECAB_POLICY_ID:}

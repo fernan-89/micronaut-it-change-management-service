@@ -1,8 +1,8 @@
 package com.thinklab.infrastructure.adapter.in.web.handler;
 
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
-import com.thinklab.domain.exception.DuplicateChangeRequestException;
 import com.thinklab.domain.exception.InvalidChangeRequestStatusException;
+import com.thinklab.domain.exception.SchedulingConflictException;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -66,18 +66,21 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("DuplicateChangeRequestException maps to 409 with ERR-CHG-00409")
-    void conflict() {
-        assertProblem(exceptionHandler.handle(request, new DuplicateChangeRequestException("dup")), HttpStatus.CONFLICT, "ERR-CHG-00409");
-    }
-
-    @Test
     @DisplayName("InvalidChangeRequestStatusException maps to 409 Conflict with ERR-CHG-00409 (AST-03)")
     void stateConflictIs409() {
         Map<String, Object> body = assertProblem(exceptionHandler.handle(request, new InvalidChangeRequestStatusException("Illegal transition")),
                 HttpStatus.CONFLICT, "ERR-CHG-00409");
 
         assertEquals("Illegal transition", body.get("detail"));
+    }
+
+    @Test
+    @DisplayName("SchedulingConflictException maps to 409 Conflict with ERR-CHG-00409")
+    void schedulingConflict() {
+        Map<String, Object> body = assertProblem(exceptionHandler.handle(request, new SchedulingConflictException("Window collision")),
+                HttpStatus.CONFLICT, "ERR-CHG-00409");
+
+        assertEquals("Window collision", body.get("detail"));
     }
 
     @Test
