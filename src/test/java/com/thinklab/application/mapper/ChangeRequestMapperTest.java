@@ -22,11 +22,11 @@ class ChangeRequestMapperTest {
     private static final String EXECUTOR = "op-1";
 
     @Test
-    @DisplayName("toDomain builds a new ChangeRequest from the request, id and organisation")
+    @DisplayName("toDomain builds a new ChangeRequest from the request, id and organisation, with a real externalReference")
     void toDomain() {
         UUID requesterId = UUID.randomUUID();
         Set<UUID> assets = Set.of(UUID.randomUUID());
-        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(requesterId, "t", "d", ChangeType.NORMAL, assets);
+        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(requesterId, "t", "d", ChangeType.NORMAL, assets, "Jira", "GMUD-1");
         UUID id = UUID.randomUUID();
         UUID organisationId = UUID.randomUUID();
 
@@ -38,13 +38,25 @@ class ChangeRequestMapperTest {
         assertEquals("t", cr.getTitle());
         assertEquals(ChangeType.NORMAL, cr.getChangeType());
         assertEquals(assets, cr.getTargetAssetIds());
+        assertEquals("Jira", cr.getExternalReference().system());
+        assertEquals("GMUD-1", cr.getExternalReference().externalId());
     }
 
     @Test
-    @DisplayName("toResponse projects every field, including a null riskLevel/impactLevel before assessment")
+    @DisplayName("toDomain leaves externalReference null when either half of the pair is missing")
+    void toDomainNoExternalReference() {
+        InitiateChangeRequestRequest bothNull = new InitiateChangeRequestRequest(UUID.randomUUID(), "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, null);
+        assertNull(ChangeRequestMapper.toDomain(bothNull, UUID.randomUUID(), UUID.randomUUID(), EXECUTOR).getExternalReference());
+
+        InitiateChangeRequestRequest systemOnly = new InitiateChangeRequestRequest(UUID.randomUUID(), "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()), "Jira", null);
+        assertNull(ChangeRequestMapper.toDomain(systemOnly, UUID.randomUUID(), UUID.randomUUID(), EXECUTOR).getExternalReference());
+    }
+
+    @Test
+    @DisplayName("toResponse projects every field, including a null riskLevel/impactLevel/externalReference before assessment")
     void toResponseFreshChangeRequest() {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "t", "d",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
 
         ChangeRequestResponse response = ChangeRequestMapper.toResponse(cr);
 
@@ -53,13 +65,14 @@ class ChangeRequestMapperTest {
         assertNull(response.riskLevel());
         assertNull(response.impactLevel());
         assertNull(response.approvalRequestId());
+        assertNull(response.externalReference());
     }
 
     @Test
-    @DisplayName("toResponse projects a fully-assessed ChangeRequest's risk/impact as strings")
+    @DisplayName("toResponse projects a fully-assessed ChangeRequest's risk/impact as strings and a real externalReference")
     void toResponseAssessedChangeRequest() {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "t", "d",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), new ChangeRequest.ExternalReference("Jira", "GMUD-2"), EXECUTOR);
         cr.submit(EXECUTOR);
         cr.assess(RiskLevel.HIGH, ImpactLevel.LOW, EXECUTOR);
 
@@ -68,13 +81,15 @@ class ChangeRequestMapperTest {
         assertEquals("HIGH", response.riskLevel());
         assertEquals("LOW", response.impactLevel());
         assertEquals("ASSESSED", response.status());
+        assertEquals("Jira", response.externalReference().system());
+        assertEquals("GMUD-2", response.externalReference().externalId());
     }
 
     @Test
     @DisplayName("toResponse (audit entry) preserves a null fromStatus for the initiating entry, and a real one thereafter")
     void toResponseAuditEntry() {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "t", "d",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
         cr.submit(EXECUTOR);
 
         var initiated = ChangeRequestMapper.toResponse(cr.getAuditTrail().get(0));

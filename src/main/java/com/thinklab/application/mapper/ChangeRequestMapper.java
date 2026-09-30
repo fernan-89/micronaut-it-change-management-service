@@ -3,8 +3,10 @@ package com.thinklab.application.mapper;
 import com.thinklab.application.dto.request.InitiateChangeRequestRequest;
 import com.thinklab.application.dto.response.ChangeRequestAuditEntryResponse;
 import com.thinklab.application.dto.response.ChangeRequestResponse;
+import com.thinklab.application.dto.response.ExternalReferenceResponse;
 import com.thinklab.domain.model.ChangeRequest;
 import com.thinklab.domain.model.ChangeRequest.ChangeRequestAuditEntry;
+import com.thinklab.domain.model.ChangeRequest.ExternalReference;
 
 import java.util.UUID;
 
@@ -16,8 +18,11 @@ public final class ChangeRequestMapper {
     }
 
     public static ChangeRequest toDomain(InitiateChangeRequestRequest request, UUID sovereignId, UUID organisationId, String executor) {
+        ExternalReference externalReference = request.externalReferenceSystem() != null && request.externalReferenceId() != null
+                ? new ExternalReference(request.externalReferenceSystem(), request.externalReferenceId())
+                : null;
         return ChangeRequest.createNew(sovereignId, organisationId, request.requesterId(), request.title(),
-                request.description(), request.changeType(), request.targetAssetIds(), executor);
+                request.description(), request.changeType(), request.targetAssetIds(), externalReference, executor);
     }
 
     public static ChangeRequestResponse toResponse(ChangeRequest changeRequest) {
@@ -29,6 +34,8 @@ public final class ChangeRequestMapper {
                 changeRequest.getDescription(),
                 changeRequest.getChangeType().name(),
                 changeRequest.getTargetAssetIds(),
+                changeRequest.getExternalReference() != null
+                        ? new ExternalReferenceResponse(changeRequest.getExternalReference().system(), changeRequest.getExternalReference().externalId()) : null,
                 changeRequest.getRiskLevel() != null ? changeRequest.getRiskLevel().name() : null,
                 changeRequest.getImpactLevel() != null ? changeRequest.getImpactLevel().name() : null,
                 changeRequest.getStatus().name(),

@@ -56,7 +56,7 @@ class ChangeRequestIntegrationUseCaseTest {
 
     private ChangeRequest assessedChangeRequest(ChangeType type) {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "t", "d",
-                type, Set.of(UUID.randomUUID()), EXECUTOR);
+                type, Set.of(UUID.randomUUID()), null, EXECUTOR);
         cr.submit(EXECUTOR);
         cr.assess(RiskLevel.LOW, ImpactLevel.LOW, EXECUTOR);
         return cr;

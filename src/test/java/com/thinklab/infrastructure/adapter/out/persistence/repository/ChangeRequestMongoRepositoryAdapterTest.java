@@ -62,7 +62,7 @@ class ChangeRequestMongoRepositoryAdapterTest {
         changeRequestId = UUID.randomUUID();
         organisationId = UUID.randomUUID();
         changeRequest = ChangeRequest.createNew(changeRequestId, organisationId, UUID.randomUUID(), "t", "d",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), "op-1");
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, "op-1");
         entry = new ChangeRequestAuditEntry(Instant.now(), "ACTION", "op-1", ChangeStatus.DRAFT, ChangeStatus.SUBMITTED, "detail");
     }
 

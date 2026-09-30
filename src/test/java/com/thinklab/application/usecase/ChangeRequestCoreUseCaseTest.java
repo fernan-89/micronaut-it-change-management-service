@@ -51,7 +51,7 @@ class ChangeRequestCoreUseCaseTest {
 
     private ChangeRequest newChangeRequest() {
         return ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "t", "d",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
     }
 
     // --- InitiateChangeRequestUseCase ---
@@ -59,7 +59,7 @@ class ChangeRequestCoreUseCaseTest {
     @Test
     @DisplayName("initiate: fetches a sovereign id and persists the new ChangeRequest")
     void initiate() {
-        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(requesterId, "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()));
+        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(requesterId, "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, null);
         UUID sovereignId = UUID.randomUUID();
         when(hashServicePort.generateSovereignId("change-request-creation")).thenReturn(Mono.just(sovereignId));
         when(changeRequestRepository.create(any(ChangeRequest.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -157,7 +157,7 @@ class ChangeRequestCoreUseCaseTest {
         StepVerifier.create(useCase.execute(cancellable.getId(), ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).verifyComplete();
 
         ChangeRequest scheduled = ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "t", "d",
-                ChangeType.STANDARD, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.STANDARD, Set.of(UUID.randomUUID()), null, EXECUTOR);
         scheduled.submit(EXECUTOR);
         scheduled.assess(RiskLevel.LOW, ImpactLevel.LOW, EXECUTOR);
         scheduled.preApprove(EXECUTOR);
@@ -198,7 +198,7 @@ class ChangeRequestCoreUseCaseTest {
 
     private ChangeRequest inProgressChangeRequest() {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "t", "d",
-                ChangeType.STANDARD, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.STANDARD, Set.of(UUID.randomUUID()), null, EXECUTOR);
         cr.submit(EXECUTOR);
         cr.assess(RiskLevel.LOW, ImpactLevel.LOW, EXECUTOR);
         cr.preApprove(EXECUTOR);

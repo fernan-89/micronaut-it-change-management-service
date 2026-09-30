@@ -23,11 +23,12 @@ class ChangeRequestDocumentTest {
     private static final String EXECUTOR = "op-1";
 
     @Test
-    @DisplayName("toDocument/toDomain round-trip preserves the initiating audit entry, including its null fromStatus")
+    @DisplayName("toDocument/toDomain round-trip preserves the initiating audit entry and a real externalReference")
     void roundTripFreshChangeRequest() {
         UUID assetId = UUID.randomUUID();
+        ChangeRequest.ExternalReference externalReference = new ChangeRequest.ExternalReference("Jira", "GMUD-1");
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "Upgrade firmware", "desc", ChangeType.NORMAL, Set.of(assetId), EXECUTOR);
+                "Upgrade firmware", "desc", ChangeType.NORMAL, Set.of(assetId), externalReference, EXECUTOR);
 
         ChangeRequestDocument document = ChangeRequestPersistenceMapper.toDocument(cr);
         ChangeRequest restored = ChangeRequestPersistenceMapper.toDomain(document);
@@ -35,6 +36,7 @@ class ChangeRequestDocumentTest {
         assertEquals(cr.getId(), restored.getId());
         assertEquals(cr.getStatus(), restored.getStatus());
         assertEquals(Set.of(assetId), restored.getTargetAssetIds());
+        assertEquals(externalReference, restored.getExternalReference());
         assertEquals(1, restored.getAuditTrail().size());
         assertNull(restored.getAuditTrail().get(0).fromStatus());
         assertEquals(ChangeStatus.DRAFT, restored.getAuditTrail().get(0).toStatus());
@@ -43,10 +45,10 @@ class ChangeRequestDocumentTest {
     }
 
     @Test
-    @DisplayName("toDocument/toDomain round-trip preserves risk/impact, routing, scheduling and completion data")
+    @DisplayName("toDocument/toDomain round-trip preserves risk/impact, routing, scheduling and completion data, and a null externalReference")
     void roundTripFullyDrivenChangeRequest() {
         ChangeRequest cr = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "Upgrade firmware", "desc", ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                "Upgrade firmware", "desc", ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
         cr.submit(EXECUTOR);
         cr.assess(RiskLevel.HIGH, ImpactLevel.MEDIUM, EXECUTOR);
         UUID approvalRequestId = UUID.randomUUID();
@@ -73,6 +75,7 @@ class ChangeRequestDocumentTest {
         assertEquals("done", restored.getImplementationNotes());
         assertEquals("closed out", restored.getCloseNotes());
         assertEquals(cr.getAuditTrail().size(), restored.getAuditTrail().size());
+        assertNull(restored.getExternalReference());
     }
 
     @Test

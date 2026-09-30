@@ -60,7 +60,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
 
     private static ChangeRequest newChangeRequest(UUID organisationId, UUID requesterId) {
         return ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "Upgrade firmware", "desc",
-                ChangeType.NORMAL, Set.of(UUID.randomUUID()), EXECUTOR);
+                ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
     }
 
     private static ChangeRequestAuditEntry audit(String action, ChangeStatus from, ChangeStatus to) {

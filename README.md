@@ -38,7 +38,7 @@ Built with Java 21 and Micronaut 4.4.2 on a strict Hexagonal Architecture and a 
 ```text
 ChangeRequest {
   id, organisationId, requesterId, title, description,
-  changeType, targetAssetIds[], riskLevel?, impactLevel?, status,
+  changeType, targetAssetIds[], externalReference?, riskLevel?, impactLevel?, status,
   approvalRequestId?, operationWindowId?, plannedStart?, plannedEnd?,
   implementationNotes?, rollbackReason?, closeNotes?, createdAt, updatedAt,
   auditTrail[ { occurredAt, action, executor, fromStatus?, toStatus, detail } ]
@@ -46,6 +46,11 @@ ChangeRequest {
 changeType: STANDARD | NORMAL | EMERGENCY
 riskLevel, impactLevel: LOW | MEDIUM | HIGH
 ```
+
+`externalReference` (`{ system, externalId }`) is optional, set once at `initiate` and never mutated - a
+pointer into an external change/ticketing system (e.g. ServiceNow, Jira) so a future integration-hub
+can connect without a schema change. This service neither imports from nor depends on any such system
+today.
 
 ### Lifecycle (ADR-030/031)
 

@@ -15,6 +15,7 @@ public record ChangeRequestResponse(
         String description,
         String changeType,
         Set<UUID> targetAssetIds,
+        ExternalReferenceResponse externalReference,
         String riskLevel,
         String impactLevel,
         String status,

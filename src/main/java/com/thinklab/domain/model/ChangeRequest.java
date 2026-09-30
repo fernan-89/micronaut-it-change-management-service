@@ -42,6 +42,7 @@ public class ChangeRequest {
     private String description;
     private final ChangeType changeType;
     private final Set<UUID> targetAssetIds;
+    private final ExternalReference externalReference;
     private RiskLevel riskLevel;
     private ImpactLevel impactLevel;
     private ChangeStatus status;
@@ -57,7 +58,7 @@ public class ChangeRequest {
     private final List<ChangeRequestAuditEntry> auditTrail;
 
     private ChangeRequest(UUID id, UUID organisationId, UUID requesterId, String title, String description,
-                           ChangeType changeType, Set<UUID> targetAssetIds, String executor) {
+                           ChangeType changeType, Set<UUID> targetAssetIds, ExternalReference externalReference, String executor) {
         this.id = id;
         this.organisationId = organisationId;
         this.requesterId = requesterId;
@@ -65,6 +66,7 @@ public class ChangeRequest {
         this.description = description;
         this.changeType = changeType;
         this.targetAssetIds = new LinkedHashSet<>(targetAssetIds);
+        this.externalReference = externalReference;
         this.status = ChangeStatus.DRAFT;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
@@ -74,7 +76,8 @@ public class ChangeRequest {
     }
 
     private ChangeRequest(UUID id, UUID organisationId, UUID requesterId, String title, String description,
-                           ChangeType changeType, Set<UUID> targetAssetIds, RiskLevel riskLevel, ImpactLevel impactLevel,
+                           ChangeType changeType, Set<UUID> targetAssetIds, ExternalReference externalReference,
+                           RiskLevel riskLevel, ImpactLevel impactLevel,
                            ChangeStatus status, UUID approvalRequestId, UUID operationWindowId, Instant plannedStart,
                            Instant plannedEnd, String implementationNotes, String rollbackReason, String closeNotes,
                            Instant createdAt, Instant updatedAt, List<ChangeRequestAuditEntry> auditTrail) {
@@ -85,6 +88,7 @@ public class ChangeRequest {
         this.description = description;
         this.changeType = changeType;
         this.targetAssetIds = targetAssetIds != null ? new LinkedHashSet<>(targetAssetIds) : new LinkedHashSet<>();
+        this.externalReference = externalReference;
         this.riskLevel = riskLevel;
         this.impactLevel = impactLevel;
         this.status = status != null ? status : ChangeStatus.DRAFT;
@@ -101,7 +105,8 @@ public class ChangeRequest {
     }
 
     public static ChangeRequest createNew(UUID id, UUID organisationId, UUID requesterId, String title, String description,
-                                           ChangeType changeType, Set<UUID> targetAssetIds, String executor) {
+                                           ChangeType changeType, Set<UUID> targetAssetIds, ExternalReference externalReference,
+                                           String executor) {
         if (id == null || organisationId == null || requesterId == null || changeType == null) {
             throw new IllegalArgumentException("ID, Organisation ID, Requester ID and Change Type are mandatory for ChangeRequest creation.");
         }
@@ -112,19 +117,20 @@ public class ChangeRequest {
             throw new IllegalArgumentException("At least one target Asset is mandatory for ChangeRequest creation.");
         }
         requireExecutor(executor);
-        return new ChangeRequest(id, organisationId, requesterId, title, description, changeType, targetAssetIds, executor);
+        return new ChangeRequest(id, organisationId, requesterId, title, description, changeType, targetAssetIds, externalReference, executor);
     }
 
     public static ChangeRequest reconstitute(UUID id, UUID organisationId, UUID requesterId, String title, String description,
-                                              ChangeType changeType, Set<UUID> targetAssetIds, RiskLevel riskLevel, ImpactLevel impactLevel,
+                                              ChangeType changeType, Set<UUID> targetAssetIds, ExternalReference externalReference,
+                                              RiskLevel riskLevel, ImpactLevel impactLevel,
                                               ChangeStatus status, UUID approvalRequestId, UUID operationWindowId, Instant plannedStart,
                                               Instant plannedEnd, String implementationNotes, String rollbackReason, String closeNotes,
                                               Instant createdAt, Instant updatedAt, List<ChangeRequestAuditEntry> auditTrail) {
         if (id == null || organisationId == null || requesterId == null || title == null || changeType == null) {
             throw new IllegalArgumentException("ID, Organisation ID, Requester ID, Title and Change Type are mandatory to reconstitute a ChangeRequest.");
         }
-        return new ChangeRequest(id, organisationId, requesterId, title, description, changeType, targetAssetIds, riskLevel,
-                impactLevel, status, approvalRequestId, operationWindowId, plannedStart, plannedEnd, implementationNotes,
+        return new ChangeRequest(id, organisationId, requesterId, title, description, changeType, targetAssetIds, externalReference,
+                riskLevel, impactLevel, status, approvalRequestId, operationWindowId, plannedStart, plannedEnd, implementationNotes,
                 rollbackReason, closeNotes, createdAt, updatedAt, auditTrail);
     }
 
@@ -303,6 +309,7 @@ public class ChangeRequest {
     public String getDescription() { return description; }
     public ChangeType getChangeType() { return changeType; }
     public Set<UUID> getTargetAssetIds() { return Collections.unmodifiableSet(targetAssetIds); }
+    public ExternalReference getExternalReference() { return externalReference; }
     public RiskLevel getRiskLevel() { return riskLevel; }
     public ImpactLevel getImpactLevel() { return impactLevel; }
     public ChangeStatus getStatus() { return status; }
@@ -348,4 +355,16 @@ public class ChangeRequest {
      */
     public record ChangeRequestAuditEntry(Instant occurredAt, String action, String executor,
                                            ChangeStatus fromStatus, ChangeStatus toStatus, String detail) {}
+
+    /**
+     * An optional pointer into an external change/ticketing system (e.g. ServiceNow, Jira), set once at
+     * creation and never mutated - so a future integration-hub can connect without a schema change,
+     * without this service importing from or depending on that system today.
+     */
+    public record ExternalReference(String system, String externalId) {
+        public ExternalReference {
+            Objects.requireNonNull(system, "system cannot be null.");
+            Objects.requireNonNull(externalId, "externalId cannot be null.");
+        }
+    }
 }

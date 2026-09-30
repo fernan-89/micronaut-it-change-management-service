@@ -40,7 +40,7 @@ class ChangeRequestTest {
     }
 
     private ChangeRequest newChangeRequest(ChangeType type) {
-        return ChangeRequest.createNew(id, organisationId, requesterId, "Upgrade firmware", "desc", type, targetAssetIds, EXECUTOR);
+        return ChangeRequest.createNew(id, organisationId, requesterId, "Upgrade firmware", "desc", type, targetAssetIds, null, EXECUTOR);
     }
 
     @Test
@@ -59,33 +59,33 @@ class ChangeRequestTest {
     @Test
     @DisplayName("createNew rejects missing identity, blank title, an empty asset set or a blank executor")
     void createNewGuards() {
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(null, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, null, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, null, "t", "d", ChangeType.NORMAL, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", null, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, null, "d", ChangeType.NORMAL, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "", "d", ChangeType.NORMAL, targetAssetIds, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, null, EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, Set.of(), EXECUTOR));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, " "));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(null, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, null, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, null, "t", "d", ChangeType.NORMAL, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", null, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, null, "d", ChangeType.NORMAL, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "", "d", ChangeType.NORMAL, targetAssetIds, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, null, null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, Set.of(), null, EXECUTOR));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.createNew(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, " "));
     }
 
     @Test
     @DisplayName("reconstitute rejects missing mandatory identity")
     void reconstituteGuards() {
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(null, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, null, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, null, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, requesterId, null, "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, requesterId, "t", "d", null, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(null, organisationId, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, null, requesterId, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, null, "t", "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, requesterId, null, "d", ChangeType.NORMAL, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> ChangeRequest.reconstitute(id, organisationId, requesterId, "t", "d", null, targetAssetIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
     }
 
     @Test
     @DisplayName("reconstitute defaults a missing status to DRAFT and a null asset set to empty")
     void reconstituteDefaults() {
         ChangeRequest restored = ChangeRequest.reconstitute(id, organisationId, requesterId, "t", "d", ChangeType.NORMAL, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(ChangeStatus.DRAFT, restored.getStatus());
         assertTrue(restored.getTargetAssetIds().isEmpty());

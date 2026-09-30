@@ -4,6 +4,7 @@ import com.thinklab.domain.model.ChangeRequest;
 import com.thinklab.domain.model.ChangeRequest.ChangeRequestAuditEntry;
 import com.thinklab.domain.model.ChangeRequest.ChangeStatus;
 import com.thinklab.domain.model.ChangeRequest.ChangeType;
+import com.thinklab.domain.model.ChangeRequest.ExternalReference;
 import com.thinklab.domain.model.ChangeRequest.ImpactLevel;
 import com.thinklab.domain.model.ChangeRequest.RiskLevel;
 import io.micronaut.core.annotation.Introspected;
@@ -33,6 +34,7 @@ public class ChangeRequestDocument {
     private String description;
     private String changeType;
     private Set<UUID> targetAssetIds = new LinkedHashSet<>();
+    private ExternalReferenceDocument externalReference;
     private String riskLevel;
     private String impactLevel;
     private String status;
@@ -61,6 +63,8 @@ public class ChangeRequestDocument {
     public void setChangeType(String changeType) { this.changeType = changeType; }
     public Set<UUID> getTargetAssetIds() { return targetAssetIds; }
     public void setTargetAssetIds(Set<UUID> targetAssetIds) { this.targetAssetIds = targetAssetIds; }
+    public ExternalReferenceDocument getExternalReference() { return externalReference; }
+    public void setExternalReference(ExternalReferenceDocument externalReference) { this.externalReference = externalReference; }
     public String getRiskLevel() { return riskLevel; }
     public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
     public String getImpactLevel() { return impactLevel; }
@@ -87,6 +91,15 @@ public class ChangeRequestDocument {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public List<AuditEntryDocument> getAuditTrail() { return auditTrail; }
     public void setAuditTrail(List<AuditEntryDocument> auditTrail) { this.auditTrail = auditTrail; }
+
+    @Introspected
+    public record ExternalReferenceDocument(String system, String externalId) {
+        public static ExternalReferenceDocument fromDomain(ExternalReference ref) {
+            return ref == null ? null : new ExternalReferenceDocument(ref.system(), ref.externalId());
+        }
+
+        ExternalReference toDomain() { return new ExternalReference(system, externalId); }
+    }
 
     @Introspected
     public record AuditEntryDocument(Instant occurredAt, String action, String executor,
@@ -119,6 +132,7 @@ public class ChangeRequestDocument {
             doc.setDescription(changeRequest.getDescription());
             doc.setChangeType(changeRequest.getChangeType().name());
             doc.setTargetAssetIds(new LinkedHashSet<>(changeRequest.getTargetAssetIds()));
+            doc.setExternalReference(ExternalReferenceDocument.fromDomain(changeRequest.getExternalReference()));
             doc.setRiskLevel(changeRequest.getRiskLevel() != null ? changeRequest.getRiskLevel().name() : null);
             doc.setImpactLevel(changeRequest.getImpactLevel() != null ? changeRequest.getImpactLevel().name() : null);
             doc.setStatus(changeRequest.getStatus().name());
@@ -145,7 +159,9 @@ public class ChangeRequestDocument {
 
             return ChangeRequest.reconstitute(
                     doc.getId(), doc.getOrganisationId(), doc.getRequesterId(), doc.getTitle(), doc.getDescription(),
-                    ChangeType.valueOf(doc.getChangeType()), targetAssetIds, riskLevel, impactLevel, status,
+                    ChangeType.valueOf(doc.getChangeType()), targetAssetIds,
+                    doc.getExternalReference() != null ? doc.getExternalReference().toDomain() : null,
+                    riskLevel, impactLevel, status,
                     doc.getApprovalRequestId(), doc.getOperationWindowId(), doc.getPlannedStart(), doc.getPlannedEnd(),
                     doc.getImplementationNotes(), doc.getRollbackReason(), doc.getCloseNotes(),
                     doc.getCreatedAt(), doc.getUpdatedAt(), trail

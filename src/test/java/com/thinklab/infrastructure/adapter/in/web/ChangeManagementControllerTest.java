@@ -80,14 +80,14 @@ class ChangeManagementControllerTest {
 
     private ChangeRequestResponse sampleResponse() {
         return new ChangeRequestResponse(id, UUID.randomUUID(), UUID.randomUUID(), "t", "d", "NORMAL",
-                Set.of(UUID.randomUUID()), null, null, "DRAFT", null, null, null, null, null, null, null,
+                Set.of(UUID.randomUUID()), null, null, null, "DRAFT", null, null, null, null, null, null, null,
                 Instant.now(), Instant.now());
     }
 
     @Test
     @DisplayName("initiate returns 201 Created")
     void initiate() {
-        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(UUID.randomUUID(), "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()));
+        InitiateChangeRequestRequest request = new InitiateChangeRequestRequest(UUID.randomUUID(), "t", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, null);
         when(initiateChangeRequestUseCase.execute(any(), eq(request), eq(EXECUTOR))).thenReturn(Mono.just(sampleResponse()));
 
         var response = controller.initiate(TENANT, EXECUTOR, request).block();
