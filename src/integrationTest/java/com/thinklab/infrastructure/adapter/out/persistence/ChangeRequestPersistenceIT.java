@@ -126,7 +126,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
         assertEquals(ChangeStatus.CLOSED, found.getStatus());
         assertEquals("done", found.getImplementationNotes());
         assertEquals("closed", found.getCloseNotes());
-        assertEquals(initial + 8, found.getAuditTrail().size());
+        assertEquals(initial + 9, found.getAuditTrail().size());
     }
 
     @Test
