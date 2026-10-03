@@ -9,6 +9,6 @@ package com.thinklab.domain.exception;
 public class FreezeOverrideNotPermittedException extends BusinessException {
 
     public FreezeOverrideNotPermittedException(String role) {
-        super("ERR-CHG-00403", "The role " + role + " may not override a CHANGE_FREEZE: that needs ADMIN. The change can still be scheduled without the override.");
+        super("ERR-CHG-00403", "The role " + role + " may not override a CHANGE_FREEZE: that needs ADMIN or a seat on the ECAB. The change can still be scheduled without the override.");
     }
 }

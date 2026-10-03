@@ -2,6 +2,7 @@ package com.thinklab.domain.port;
 
 import reactor.core.publisher.Mono;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -25,6 +26,12 @@ public interface ApprovalServicePort {
      * read back in the same request/response cycle so the caller can react immediately.
      */
     Mono<ApprovalOutcome> captureDecision(UUID approvalRequestId, UUID approverId, DecisionOutcome outcome, String comment, String executor);
+
+    /**
+     * BIAN Behavior Qualifier {@code policy/retrieve} on workflow-approval-service. Everyone who is an approver of ANY stage of the
+     * policy (a chain has several stages, a one-stage policy just one). Used to decide whether an executor sits on the ECAB.
+     */
+    Mono<Set<UUID>> approversOfPolicy(UUID policyId);
 
     enum DecisionOutcome { APPROVE, REJECT }
 

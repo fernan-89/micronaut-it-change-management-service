@@ -8,8 +8,9 @@ import java.util.Set;
  * normally but cannot waive a freeze. With security off there is no role at all ({@code null}) and nothing is enforced, the same
  * "off by default" posture as the rest of the platform.
  *
- * <p>This deliberately reuses the roles the kit already has. A dedicated change-manager role is the better long-term answer but
- * needs a kit release and a rollout to every service; until then ADMIN is the narrowest role that exists.
+ * <p>This deliberately reuses the roles the kit already has. A dedicated change-manager role needs a kit release and a rollout to every
+ * service, so instead ADR-036 also lets a member of the tenant's ECAB waive a freeze (decided by the use case, which can read the
+ * ECAB; this class only answers for the role).
  */
 public final class FreezeOverridePolicy {
 

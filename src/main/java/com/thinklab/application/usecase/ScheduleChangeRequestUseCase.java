@@ -4,8 +4,10 @@ import com.thinklab.application.dto.request.ScheduleChangeRequestRequest;
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
 import com.thinklab.domain.exception.FreezeOverrideNotPermittedException;
 import com.thinklab.domain.model.FreezeOverridePolicy;
+import com.thinklab.domain.port.ApprovalServicePort;
 import com.thinklab.domain.port.OperationWindowServicePort;
 import com.thinklab.domain.repository.ChangeRequestRepository;
+import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +28,15 @@ public class ScheduleChangeRequestUseCase {
 
     private final ChangeRequestRepository changeRequestRepository;
     private final OperationWindowServicePort operationWindowServicePort;
+    private final ApprovalServicePort approvalServicePort;
+    private final UUID ecabPolicyId;
 
-    public ScheduleChangeRequestUseCase(ChangeRequestRepository changeRequestRepository, OperationWindowServicePort operationWindowServicePort) {
+    public ScheduleChangeRequestUseCase(ChangeRequestRepository changeRequestRepository, OperationWindowServicePort operationWindowServicePort,
+                                        ApprovalServicePort approvalServicePort, @Value("${thinklab.change-management.ecab-policy-id}") String ecabPolicyId) {
         this.changeRequestRepository = changeRequestRepository;
         this.operationWindowServicePort = operationWindowServicePort;
+        this.approvalServicePort = approvalServicePort;
+        this.ecabPolicyId = ecabPolicyId == null || ecabPolicyId.isBlank() ? null : UUID.fromString(ecabPolicyId);
     }
 
     /**
@@ -39,10 +46,28 @@ public class ScheduleChangeRequestUseCase {
     public Mono<Void> execute(UUID id, ScheduleChangeRequestRequest request, String executor, String role) {
         log.info("[USE CASE] Scheduling ChangeRequest ID: {} from {} to {}", id, request.plannedStart(), request.plannedEnd());
 
-        if (request.freezeOverrideJustification() != null && !FreezeOverridePolicy.permits(role)) {
-            return Mono.error(new FreezeOverrideNotPermittedException(role));
+        if (request.freezeOverrideJustification() == null || FreezeOverridePolicy.permits(role)) {
+            return reserve(id, request, executor);
         }
+        // Below ADMIN a freeze can still be waived by someone who sits on the ECAB (ADR-036): they are the people the tenant already
+        // trusts to approve an emergency, so no role of its own is needed.
+        return isEcabMember(executor).flatMap(member -> member ? reserve(id, request, executor) : Mono.error(new FreezeOverrideNotPermittedException(role)));
+    }
 
+    /** Fail-closed: this is a privilege, so when the ECAB cannot be read (not configured, service down) the answer is no. */
+    private Mono<Boolean> isEcabMember(String executor) {
+        if (ecabPolicyId == null) {
+            return Mono.just(false);
+        }
+        return approvalServicePort.approversOfPolicy(ecabPolicyId)
+                .map(approvers -> approvers.stream().anyMatch(approver -> approver.toString().equals(executor)))
+                .onErrorResume(failure -> {
+                    log.warn("[USE CASE] Could not read the ECAB approvers to check a freeze override; refusing it. Reason: {}", failure.getMessage());
+                    return Mono.just(false);
+                });
+    }
+
+    private Mono<Void> reserve(UUID id, ScheduleChangeRequestRequest request, String executor) {
         return changeRequestRepository.findById(id)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {

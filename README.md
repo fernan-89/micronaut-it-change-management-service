@@ -84,7 +84,7 @@ verbatim to workflow-approval-service - not an operator identity (ADR-032). Ther
 | assess | `PUT /it-change-management/v1/{id}/assess` |
 | route-for-approval | `PUT /it-change-management/v1/{id}/route-for-approval` |
 | approval/capture | `PUT /it-change-management/v1/{id}/approval/capture` |
-| schedule (optional `freezeOverrideJustification`: EMERGENCY + APPROVED only, ADMIN/SERVICE role when security is on, reserves over a CHANGE_FREEZE, ADR-034/035) | `PUT /it-change-management/v1/{id}/schedule` |
+| schedule (optional `freezeOverrideJustification`: EMERGENCY + APPROVED only, ADMIN/SERVICE role - or a seat on the ECAB - when security is on, reserves over a CHANGE_FREEZE, ADR-034/035/036) | `PUT /it-change-management/v1/{id}/schedule` |
 | control/start | `PUT /it-change-management/v1/{id}/control/start` |
 | complete | `PUT /it-change-management/v1/{id}/complete` |
 | rollback | `PUT /it-change-management/v1/{id}/rollback` |
@@ -97,7 +97,7 @@ verbatim to workflow-approval-service - not an operator identity (ADR-032). Ther
 | error_code | HTTP | Meaning |
 |---|---|---|
 | `ERR-CHG-00404` | 404 | ChangeRequest not found |
-| `ERR-CHG-00403` | 403 | A freeze override was requested by a role below ADMIN (ADR-035); the change can still be scheduled without it |
+| `ERR-CHG-00403` | 403 | A freeze override was requested by someone who is neither ADMIN/SERVICE nor on the ECAB (ADR-035/036); the change can still be scheduled without it |
 | `ERR-CHG-00409` | 409 | Illegal lifecycle transition, missing approval-in-progress, or a scheduling collision surfaced by operation-window-service (ADR-019/ADR-033) |
 | `ERR-VALIDATION-00400` | 400 | Payload/header/identifier validation failure |
 | `ERR-INTERNAL-00500` | 500 | Unexpected technical failure |

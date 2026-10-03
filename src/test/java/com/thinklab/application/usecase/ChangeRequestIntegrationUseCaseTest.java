@@ -226,7 +226,7 @@ class ChangeRequestIntegrationUseCaseTest {
     void scheduleNotFound() {
         UUID id = UUID.randomUUID();
         when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
 
         StepVerifier.create(useCase.execute(id, new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600)), EXECUTOR, null))
                 .expectError(ChangeRequestNotFoundException.class)
@@ -252,7 +252,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
                 .thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
 
         StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), EXECUTOR, "ADMIN")).verifyComplete();
     }
@@ -263,7 +263,7 @@ class ChangeRequestIntegrationUseCaseTest {
         ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
         cr.preApprove(EXECUTOR);
         when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
 
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(cr.getId(),
                 new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage"), EXECUTOR, null).block());
@@ -274,9 +274,10 @@ class ChangeRequestIntegrationUseCaseTest {
     @Test
     @DisplayName("schedule: a freeze override from a role below ADMIN is refused (403) before the change is even loaded; ADMIN and SERVICE may")
     void scheduleOverrideNeedsAnElevatedRole() {
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
         ScheduleChangeRequestRequest override = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage");
 
+        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
         for (String role : new String[]{"OPERATOR", "REQUESTER", "VIEWER"}) {
             StepVerifier.create(useCase.execute(UUID.randomUUID(), override, EXECUTOR, role)).expectError(FreezeOverrideNotPermittedException.class).verify();
         }
@@ -287,6 +288,44 @@ class ChangeRequestIntegrationUseCaseTest {
         for (String role : new String[]{"ADMIN", "SERVICE", null}) {
             StepVerifier.create(useCase.execute(id, override, EXECUTOR, role)).expectError(ChangeRequestNotFoundException.class).verify();
         }
+    }
+
+
+    @Test
+    @DisplayName("schedule: below ADMIN, a member of the ECAB may still waive a freeze (ADR-036)")
+    void scheduleOverrideAllowedForAnEcabMember() {
+        ChangeRequest cr = approvedEmergency();
+        Instant start = Instant.now();
+        Instant end = start.plusSeconds(3600);
+        UUID windowId = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID(), member)));
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, member.toString(), "P1 outage"))
+                .thenReturn(Mono.just(windowId));
+        when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any())).thenReturn(Mono.empty());
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), member.toString(), "OPERATOR")).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("schedule: someone who is not on the ECAB is refused, and so is everyone when the ECAB cannot be read or is not configured (fail-closed)")
+    void scheduleOverrideRefusedWhenNotOnTheEcab() {
+        ScheduleChangeRequestRequest override = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage");
+        ScheduleChangeRequestUseCase configured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+
+        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
+        StepVerifier.create(configured.execute(UUID.randomUUID(), override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
+
+        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.error(new IllegalStateException("down")));
+        StepVerifier.create(configured.execute(UUID.randomUUID(), override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
+
+        for (String blank : new String[]{null, " "}) {
+            ScheduleChangeRequestUseCase unconfigured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, blank);
+            StepVerifier.create(unconfigured.execute(UUID.randomUUID(), override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
+        }
+        verifyNoInteractions(changeRequestRepository, operationWindowServicePort);
     }
 
     @Test
@@ -302,7 +341,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any())).thenReturn(Mono.empty());
 
-        StepVerifier.create(new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort)
+        StepVerifier.create(new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY)
                 .execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, "VIEWER")).verifyComplete();
     }
 
@@ -319,7 +358,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
                 .thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
 
         StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, null)).verifyComplete();
     }

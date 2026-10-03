@@ -3,6 +3,7 @@ package com.thinklab.infrastructure.adapter.out.integration.workflowapproval;
 import com.thinklab.domain.port.ApprovalServicePort;
 import io.micronaut.core.annotation.Introspected;
 import io.micronaut.http.annotation.Body;
+import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
@@ -14,6 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -69,6 +73,29 @@ public class WorkflowApprovalServiceAdapter implements ApprovalServicePort {
     @Introspected
     record CaptureDecisionApiRequest(String outcome, String comment) {}
 
+    @Override
+    public Mono<Set<UUID>> approversOfPolicy(UUID policyId) {
+        log.debug("[INTEGRATION] Reading the approvers of policy {} on workflow-approval-service", policyId);
+
+        return apiClient.retrievePolicy(policyId)
+                .map(policy -> {
+                    Set<UUID> approvers = new HashSet<>(policy.eligibleApproverIds() == null ? List.<UUID>of() : policy.eligibleApproverIds());
+                    if (policy.stages() != null) {
+                        policy.stages().forEach(stage -> approvers.addAll(stage.eligibleApproverIds()));
+                    }
+                    return Set.copyOf(approvers);
+                })
+                .onErrorMap(error -> new IllegalStateException("Dependency Failure: Workflow Approval Service is currently unavailable", error));
+    }
+
+    @Serdeable
+    @Introspected
+    record PolicyApiResponse(List<UUID> eligibleApproverIds, List<PolicyStageApiResponse> stages) {}
+
+    @Serdeable
+    @Introspected
+    record PolicyStageApiResponse(List<UUID> eligibleApproverIds) {}
+
     @Serdeable
     @Introspected
     record ApprovalRequestApiResponse(UUID id, String status) {}
@@ -88,6 +115,9 @@ interface WorkflowApprovalApiClient {
             @Header("X-Executor") String executor,
             @Body WorkflowApprovalServiceAdapter.InitiateApprovalRequestApiRequest request
     );
+
+    @Get("/policy/{id}/retrieve")
+    Mono<WorkflowApprovalServiceAdapter.PolicyApiResponse> retrievePolicy(@PathVariable UUID id);
 
     @Put("/{id}/decision/capture")
     Mono<WorkflowApprovalServiceAdapter.ApprovalRequestApiResponse> captureDecision(

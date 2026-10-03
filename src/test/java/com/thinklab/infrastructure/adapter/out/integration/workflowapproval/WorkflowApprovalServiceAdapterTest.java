@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,6 +101,37 @@ class WorkflowApprovalServiceAdapterTest {
                     assertInstanceOf(IllegalStateException.class, error);
                     assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable"));
                 })
+                .verify();
+    }
+    @Test
+    @DisplayName("approversOfPolicy returns everyone who is an approver of any stage, and tolerates a policy without stages or without the flat list")
+    void approversOfPolicy() {
+        UUID policyId = UUID.randomUUID();
+        UUID lead = UUID.randomUUID();
+        UUID security = UUID.randomUUID();
+        UUID director = UUID.randomUUID();
+        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(
+                List.of(lead), List.of(new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(lead)),
+                        new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(security, director))))));
+
+        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(lead, security, director)).verifyComplete();
+
+        // an older workflow-approval answers only the flat list; a newer one could omit it
+        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(List.of(lead), null)));
+        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(lead)).verifyComplete();
+        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(null,
+                List.of(new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(security))))));
+        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(security)).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("approversOfPolicy hides infrastructure failures behind a dependency-failure error")
+    void approversOfPolicyFailure() {
+        UUID policyId = UUID.randomUUID();
+        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.error(new RuntimeException("boom")));
+
+        StepVerifier.create(adapter.approversOfPolicy(policyId))
+                .expectErrorSatisfies(error -> assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable")))
                 .verify();
     }
 }
