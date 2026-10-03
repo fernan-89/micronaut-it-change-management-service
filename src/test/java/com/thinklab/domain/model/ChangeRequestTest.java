@@ -246,6 +246,41 @@ class ChangeRequestTest {
         assertEquals(end, cr.getPlannedEnd());
     }
 
+    private ChangeRequest approvedEmergency() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.EMERGENCY);
+        cr.routeForApproval(UUID.randomUUID(), EXECUTOR);
+        cr.approve(EXECUTOR);
+        return cr;
+    }
+
+    @Test
+    @DisplayName("schedule over a CHANGE_FREEZE: an approved EMERGENCY change records the override in its audit entry")
+    void scheduleWithFreezeOverride() {
+        ChangeRequest cr = approvedEmergency();
+        Instant start = Instant.now();
+
+        ChangeRequest.ChangeRequestAuditEntry entry = cr.schedule(UUID.randomUUID(), start, start.plusSeconds(3600), EXECUTOR, "P1 outage");
+
+        assertEquals(ChangeStatus.SCHEDULED, cr.getStatus());
+        assertTrue(entry.detail().contains("CHANGE_FREEZE (override): P1 outage"));
+    }
+
+    @Test
+    @DisplayName("validateFreezeOverride: null is no override; otherwise APPROVED + EMERGENCY + non-blank justification")
+    void validateFreezeOverride() {
+        ChangeRequest emergency = approvedEmergency();
+        emergency.validateFreezeOverride(null);
+        emergency.validateFreezeOverride("P1 outage");
+
+        assertThrows(IllegalArgumentException.class, () -> emergency.validateFreezeOverride("  "));
+        assertThrows(IllegalArgumentException.class, () -> approvedChangeRequest().validateFreezeOverride("P1 outage"));
+        ChangeRequest notApproved = assessedChangeRequest(ChangeType.EMERGENCY);
+        notApproved.validateFreezeOverride(null);
+        assertThrows(InvalidChangeRequestStatusException.class, () -> notApproved.validateFreezeOverride("P1 outage"));
+        assertThrows(IllegalArgumentException.class, () -> approvedChangeRequest().schedule(UUID.randomUUID(), Instant.now(),
+                Instant.now().plusSeconds(3600), EXECUTOR, "not an emergency"));
+    }
+
     @Test
     @DisplayName("schedule requires non-null window/dates, endAfterStart, and is illegal outside APPROVED")
     void scheduleGuards() {

@@ -207,6 +207,15 @@ public class ChangeRequest {
      * reserved the referenced implementation window on operation-window-service.
      */
     public ChangeRequestAuditEntry schedule(UUID newOperationWindowId, Instant newPlannedStart, Instant newPlannedEnd, String executor) {
+        return schedule(newOperationWindowId, newPlannedStart, newPlannedEnd, executor, null);
+    }
+
+    /**
+     * As above; a non-null {@code freezeOverrideJustification} records, in the audit entry, that the window was reserved over
+     * an active CHANGE_FREEZE (ADR-034) - legal only for an EMERGENCY change.
+     */
+    public ChangeRequestAuditEntry schedule(UUID newOperationWindowId, Instant newPlannedStart, Instant newPlannedEnd, String executor,
+                                            String freezeOverrideJustification) {
         requireStatus(ChangeStatus.APPROVED);
         this.operationWindowId = Objects.requireNonNull(newOperationWindowId, "operationWindowId is mandatory to schedule a ChangeRequest.");
         this.plannedStart = Objects.requireNonNull(newPlannedStart, "plannedStart is mandatory to schedule a ChangeRequest.");
@@ -214,7 +223,26 @@ public class ChangeRequest {
         if (!newPlannedEnd.isAfter(newPlannedStart)) {
             throw new IllegalArgumentException("plannedEnd must be after plannedStart.");
         }
+        validateFreezeOverride(freezeOverrideJustification);
+        if (freezeOverrideJustification != null) {
+            return transition(ChangeStatus.SCHEDULED, "SCHEDULED", executor,
+                    "Implementation window reserved over a CHANGE_FREEZE (override): " + freezeOverrideJustification);
+        }
         return transition(ChangeStatus.SCHEDULED, "SCHEDULED", executor, "Implementation window reserved.");
+    }
+
+    /**
+     * Guards a CHANGE_FREEZE override (ADR-034) before anything is reserved remotely: {@code null} means no override; otherwise
+     * the change must be APPROVED, an EMERGENCY change (so it went through the ECAB), and the justification non-blank.
+     */
+    public void validateFreezeOverride(String freezeOverrideJustification) {
+        if (freezeOverrideJustification == null) {
+            return;
+        }
+        requireStatus(ChangeStatus.APPROVED);
+        if (changeType != ChangeType.EMERGENCY || freezeOverrideJustification.isBlank()) {
+            throw new IllegalArgumentException("A CHANGE_FREEZE override needs a non-blank justification and is only allowed for an EMERGENCY change.");
+        }
     }
 
     /** Behavior Qualifier: {@code control/start}. SCHEDULED -&gt; IN_PROGRESS. */

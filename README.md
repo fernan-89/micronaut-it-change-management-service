@@ -84,7 +84,7 @@ verbatim to workflow-approval-service - not an operator identity (ADR-032). Ther
 | assess | `PUT /it-change-management/v1/{id}/assess` |
 | route-for-approval | `PUT /it-change-management/v1/{id}/route-for-approval` |
 | approval/capture | `PUT /it-change-management/v1/{id}/approval/capture` |
-| schedule | `PUT /it-change-management/v1/{id}/schedule` |
+| schedule (optional `freezeOverrideJustification`: EMERGENCY + APPROVED only, reserves over a CHANGE_FREEZE, ADR-034) | `PUT /it-change-management/v1/{id}/schedule` |
 | control/start | `PUT /it-change-management/v1/{id}/control/start` |
 | complete | `PUT /it-change-management/v1/{id}/complete` |
 | rollback | `PUT /it-change-management/v1/{id}/rollback` |

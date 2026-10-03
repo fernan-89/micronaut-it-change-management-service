@@ -21,6 +21,7 @@ would duplicate a rule this platform already has one owner for.
   the same code every other ChangeRequest conflict uses (ADR-019). "Blocked by an active CHANGE_FREEZE"
   and "blocked by another team's reservation" are, from this service's perspective, the identical
   outcome: the window collided, try a different time or asset set.
+- **Superseded by ADR-034:** the gap described next is closed for ECAB-approved EMERGENCY changes.
 - **Accepted v1 gap, documented honestly rather than built around:** operation-window-service has no
   override/bypass mechanism for an `EMERGENCY` change to jump a `CHANGE_FREEZE`. An emergency change
   that needs to proceed during a freeze has no automated path in v1; the freeze window must be adjusted

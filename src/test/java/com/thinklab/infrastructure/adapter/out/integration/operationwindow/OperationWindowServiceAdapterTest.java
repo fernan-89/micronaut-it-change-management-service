@@ -51,7 +51,7 @@ class OperationWindowServiceAdapterTest {
         UUID windowId = UUID.randomUUID();
         when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.just(new OperationWindowApiResponse(windowId)));
 
-        StepVerifier.create(adapter.reserveImplementationWindow(organisationId, "Upgrade firmware", assets, start, end, "op-1"))
+        StepVerifier.create(adapter.reserveImplementationWindow(organisationId, "Upgrade firmware", assets, start, end, "op-1", null))
                 .expectNext(windowId)
                 .verifyComplete();
 
@@ -65,6 +65,21 @@ class OperationWindowServiceAdapterTest {
     }
 
     @Test
+    @DisplayName("a freeze-override justification is forwarded to operation-window-service")
+    void reserveImplementationWindowWithFreezeOverride() {
+        when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.just(new OperationWindowApiResponse(UUID.randomUUID())));
+
+        StepVerifier.create(adapter.reserveImplementationWindow(UUID.randomUUID(), "t", Set.of(UUID.randomUUID()),
+                        Instant.now(), Instant.now().plusSeconds(3600), "op-1", "P1 outage"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        ArgumentCaptor<InitiateOperationWindowApiRequest> captor = ArgumentCaptor.forClass(InitiateOperationWindowApiRequest.class);
+        verify(apiClient).initiate(any(), any(), captor.capture());
+        assertEquals("P1 outage", captor.getValue().changeFreezeOverrideJustification());
+    }
+
+    @Test
     @DisplayName("a 409 from operation-window-service translates into SchedulingConflictException")
     void reserveImplementationWindowCollision() {
         HttpClientResponseException collision = new HttpClientResponseException("Conflict",
@@ -72,7 +87,7 @@ class OperationWindowServiceAdapterTest {
         when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.error(collision));
 
         StepVerifier.create(adapter.reserveImplementationWindow(UUID.randomUUID(), "t", Set.of(UUID.randomUUID()),
-                        Instant.now(), Instant.now().plusSeconds(3600), "op-1"))
+                        Instant.now(), Instant.now().plusSeconds(3600), "op-1", null))
                 .expectErrorSatisfies(error -> {
                     assertInstanceOf(SchedulingConflictException.class, error);
                     assertTrue(error.getMessage().contains("collides with an existing reservation"));
@@ -88,7 +103,7 @@ class OperationWindowServiceAdapterTest {
         when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.error(notFound));
 
         StepVerifier.create(adapter.reserveImplementationWindow(UUID.randomUUID(), "t", Set.of(UUID.randomUUID()),
-                        Instant.now(), Instant.now().plusSeconds(3600), "op-1"))
+                        Instant.now(), Instant.now().plusSeconds(3600), "op-1", null))
                 .expectErrorSatisfies(error -> {
                     assertInstanceOf(IllegalStateException.class, error);
                     assertTrue(error.getMessage().contains("rejected the request"));
@@ -102,7 +117,7 @@ class OperationWindowServiceAdapterTest {
         when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.error(new RuntimeException("connection refused")));
 
         StepVerifier.create(adapter.reserveImplementationWindow(UUID.randomUUID(), "t", Set.of(UUID.randomUUID()),
-                        Instant.now(), Instant.now().plusSeconds(3600), "op-1"))
+                        Instant.now(), Instant.now().plusSeconds(3600), "op-1", null))
                 .expectErrorSatisfies(error -> {
                     assertInstanceOf(IllegalStateException.class, error);
                     assertTrue(error.getMessage().contains("currently unavailable"));

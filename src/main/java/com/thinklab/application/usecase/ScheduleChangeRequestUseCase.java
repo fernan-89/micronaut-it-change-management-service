@@ -35,13 +35,18 @@ public class ScheduleChangeRequestUseCase {
 
         return changeRequestRepository.findById(id)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
-                .flatMap(changeRequest -> operationWindowServicePort.reserveImplementationWindow(
-                                changeRequest.getOrganisationId(), changeRequest.getTitle(), changeRequest.getTargetAssetIds(),
-                                request.plannedStart(), request.plannedEnd(), executor)
-                        .flatMap(operationWindowId -> {
-                            var entry = changeRequest.schedule(operationWindowId, request.plannedStart(), request.plannedEnd(), executor);
-                            return changeRequestRepository.updateScheduling(
-                                    id, operationWindowId, request.plannedStart(), request.plannedEnd(), changeRequest.getStatus(), entry);
-                        }));
+                .flatMap(changeRequest -> {
+                    // Before anything is reserved remotely: an override on a non-EMERGENCY or non-APPROVED change must not leak a window.
+                    changeRequest.validateFreezeOverride(request.freezeOverrideJustification());
+                    return operationWindowServicePort.reserveImplementationWindow(
+                                    changeRequest.getOrganisationId(), changeRequest.getTitle(), changeRequest.getTargetAssetIds(),
+                                    request.plannedStart(), request.plannedEnd(), executor, request.freezeOverrideJustification())
+                            .flatMap(operationWindowId -> {
+                                var entry = changeRequest.schedule(operationWindowId, request.plannedStart(), request.plannedEnd(),
+                                        executor, request.freezeOverrideJustification());
+                                return changeRequestRepository.updateScheduling(
+                                        id, operationWindowId, request.plannedStart(), request.plannedEnd(), changeRequest.getStatus(), entry);
+                            });
+                });
     }
 }

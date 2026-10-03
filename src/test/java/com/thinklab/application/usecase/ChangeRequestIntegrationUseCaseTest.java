@@ -28,10 +28,12 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -230,6 +232,44 @@ class ChangeRequestIntegrationUseCaseTest {
                 .verify();
     }
 
+    private ChangeRequest approvedEmergency() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.EMERGENCY);
+        cr.routeForApproval(UUID.randomUUID(), EXECUTOR);
+        cr.approve(EXECUTOR);
+        return cr;
+    }
+
+    @Test
+    @DisplayName("schedule: an approved EMERGENCY change passes its freeze-override justification to the window reservation")
+    void scheduleWithFreezeOverride() {
+        ChangeRequest cr = approvedEmergency();
+        Instant start = Instant.now();
+        Instant end = start.plusSeconds(3600);
+        UUID windowId = UUID.randomUUID();
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, EXECUTOR, "P1 outage"))
+                .thenReturn(Mono.just(windowId));
+        when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
+                .thenReturn(Mono.empty());
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), EXECUTOR)).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("schedule: a freeze override on a non-EMERGENCY change is refused before any window is reserved")
+    void scheduleOverrideRefusedForNonEmergency() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
+        cr.preApprove(EXECUTOR);
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+
+        assertThrows(IllegalArgumentException.class, () -> useCase.execute(cr.getId(),
+                new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage"), EXECUTOR).block());
+
+        verifyNoInteractions(operationWindowServicePort);
+    }
+
     @Test
     @DisplayName("schedule: reserves the implementation window and persists the granular update")
     void scheduleSuccess() {
@@ -239,7 +279,7 @@ class ChangeRequestIntegrationUseCaseTest {
         Instant end = start.plusSeconds(3600);
         UUID windowId = UUID.randomUUID();
         when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
-        when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, EXECUTOR))
+        when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, EXECUTOR, null))
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
                 .thenReturn(Mono.empty());

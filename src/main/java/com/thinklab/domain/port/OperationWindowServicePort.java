@@ -19,7 +19,12 @@ public interface OperationWindowServicePort {
      * BIAN Behavior Qualifier {@code initiate} on operation-window-service. Reserves the change's
      * implementation window (the adapter's own choice of window type - a caller-visible concern this
      * port does not expose) and returns its sovereign id.
+     *
+     * @param freezeOverrideJustification {@code null} for a normal reservation; non-null asks operation-window-service to
+     *                                    reserve over an active CHANGE_FREEZE (ADR-034) - the caller has already checked
+     *                                    that the change is an ECAB-approved EMERGENCY
      */
     Mono<UUID> reserveImplementationWindow(UUID organisationId, String title, Set<UUID> targetAssetIds,
-                                            Instant startAt, Instant endAt, String executor);
+                                            Instant startAt, Instant endAt, String executor,
+                                            String freezeOverrideJustification);
 }

@@ -45,11 +45,12 @@ public class OperationWindowServiceAdapter implements OperationWindowServicePort
 
     @Override
     public Mono<UUID> reserveImplementationWindow(UUID organisationId, String title, Set<UUID> targetAssetIds,
-                                                    Instant startAt, Instant endAt, String executor) {
+                                                    Instant startAt, Instant endAt, String executor,
+                                                    String freezeOverrideJustification) {
         log.debug("[INTEGRATION] Reserving implementation window on operation-window-service: '{}'", title);
 
         return apiClient.initiate(organisationId.toString(), executor,
-                        new InitiateOperationWindowApiRequest(title, WINDOW_TYPE, targetAssetIds, startAt, endAt, null))
+                        new InitiateOperationWindowApiRequest(title, WINDOW_TYPE, targetAssetIds, startAt, endAt, null, freezeOverrideJustification))
                 .map(OperationWindowApiResponse::id)
                 .doOnError(error -> log.error("[INTEGRATION FAILURE] Failed to reserve implementation window: '{}'", title, error))
                 .onErrorMap(this::translate);
@@ -70,7 +71,8 @@ public class OperationWindowServiceAdapter implements OperationWindowServicePort
     @Serdeable
     @Introspected
     record InitiateOperationWindowApiRequest(String title, String windowType, Set<UUID> targetAssetIds,
-                                              Instant startAt, Instant endAt, @Nullable UUID maintenanceTicketId) {}
+                                              Instant startAt, Instant endAt, @Nullable UUID maintenanceTicketId,
+                                              @Nullable String changeFreezeOverrideJustification) {}
 
     @Serdeable
     @Introspected
