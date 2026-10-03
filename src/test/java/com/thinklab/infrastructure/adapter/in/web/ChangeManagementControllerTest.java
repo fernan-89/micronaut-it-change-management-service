@@ -162,9 +162,9 @@ class ChangeManagementControllerTest {
     @DisplayName("schedule returns 204 No Content")
     void schedule() {
         ScheduleChangeRequestRequest request = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600));
-        when(scheduleChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(scheduleChangeRequestUseCase.execute(id, request, EXECUTOR, "ADMIN")).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.schedule(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.schedule(id, EXECUTOR, "ADMIN", request).block().getStatus());
     }
 
     @Test

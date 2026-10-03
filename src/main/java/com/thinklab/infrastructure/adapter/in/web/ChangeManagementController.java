@@ -62,6 +62,7 @@ public class ChangeManagementController {
     private static final Logger log = LoggerFactory.getLogger(ChangeManagementController.class);
     static final String TENANT_HEADER = "X-Tenant-Id";
     static final String EXECUTOR_HEADER = "X-Executor";
+    static final String ROLE_HEADER = "X-Role";
 
     private final InitiateChangeRequestUseCase initiateChangeRequestUseCase;
     private final RetrieveChangeRequestUseCase retrieveChangeRequestUseCase;
@@ -173,9 +174,10 @@ public class ChangeManagementController {
     /** Behavior Qualifier: {@code schedule}. APPROVED -&gt; SCHEDULED. */
     @Put("/{id}/schedule")
     public Mono<HttpResponse<Void>> schedule(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid ScheduleChangeRequestRequest request
+            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Header(ROLE_HEADER) @Nullable String role,
+            @Body @Valid ScheduleChangeRequestRequest request
     ) {
-        return scheduleChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return scheduleChangeRequestUseCase.execute(id, request, executor, role).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/start}. SCHEDULED -&gt; IN_PROGRESS. */

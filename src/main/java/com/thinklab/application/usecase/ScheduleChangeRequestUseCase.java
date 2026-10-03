@@ -2,6 +2,8 @@ package com.thinklab.application.usecase;
 
 import com.thinklab.application.dto.request.ScheduleChangeRequestRequest;
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
+import com.thinklab.domain.exception.FreezeOverrideNotPermittedException;
+import com.thinklab.domain.model.FreezeOverridePolicy;
 import com.thinklab.domain.port.OperationWindowServicePort;
 import com.thinklab.domain.repository.ChangeRequestRepository;
 import jakarta.inject.Singleton;
@@ -30,8 +32,16 @@ public class ScheduleChangeRequestUseCase {
         this.operationWindowServicePort = operationWindowServicePort;
     }
 
-    public Mono<Void> execute(UUID id, ScheduleChangeRequestRequest request, String executor) {
+    /**
+     * @param role the verified role (X-Role) of the caller, {@code null} when security is off; only needed to decide whether a
+     *             freeze override may be requested (ADR-035)
+     */
+    public Mono<Void> execute(UUID id, ScheduleChangeRequestRequest request, String executor, String role) {
         log.info("[USE CASE] Scheduling ChangeRequest ID: {} from {} to {}", id, request.plannedStart(), request.plannedEnd());
+
+        if (request.freezeOverrideJustification() != null && !FreezeOverridePolicy.permits(role)) {
+            return Mono.error(new FreezeOverrideNotPermittedException(role));
+        }
 
         return changeRequestRepository.findById(id)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))

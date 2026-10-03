@@ -54,6 +54,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("FreezeOverrideNotPermittedException maps to 403 with ERR-CHG-00403 and names the role")
+    void freezeOverrideNotPermitted() {
+        Map<String, Object> body = assertProblem(exceptionHandler.handle(request, new com.thinklab.domain.exception.FreezeOverrideNotPermittedException("OPERATOR")),
+                HttpStatus.FORBIDDEN, "ERR-CHG-00403");
+
+        assertTrue(body.get("detail").toString().contains("OPERATOR"));
+    }
+
+    @Test
     @DisplayName("ChangeRequestNotFoundException maps to 404 with ERR-CHG-00404")
     void notFound() {
         UUID id = UUID.randomUUID();

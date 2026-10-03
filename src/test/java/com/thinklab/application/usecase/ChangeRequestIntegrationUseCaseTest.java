@@ -3,6 +3,7 @@ package com.thinklab.application.usecase;
 import com.thinklab.application.dto.request.CaptureApprovalDecisionRequest;
 import com.thinklab.application.dto.request.ScheduleChangeRequestRequest;
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
+import com.thinklab.domain.exception.FreezeOverrideNotPermittedException;
 import com.thinklab.domain.exception.InvalidChangeRequestStatusException;
 import com.thinklab.domain.model.ChangeRequest;
 import com.thinklab.domain.model.ChangeRequest.ChangeStatus;
@@ -227,7 +228,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
         ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
 
-        StepVerifier.create(useCase.execute(id, new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600)), EXECUTOR))
+        StepVerifier.create(useCase.execute(id, new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600)), EXECUTOR, null))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
     }
@@ -253,7 +254,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.empty());
         ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
 
-        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), EXECUTOR, "ADMIN")).verifyComplete();
     }
 
     @Test
@@ -265,9 +266,44 @@ class ChangeRequestIntegrationUseCaseTest {
         ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
 
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(cr.getId(),
-                new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage"), EXECUTOR).block());
+                new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage"), EXECUTOR, null).block());
 
         verifyNoInteractions(operationWindowServicePort);
+    }
+
+    @Test
+    @DisplayName("schedule: a freeze override from a role below ADMIN is refused (403) before the change is even loaded; ADMIN and SERVICE may")
+    void scheduleOverrideNeedsAnElevatedRole() {
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
+        ScheduleChangeRequestRequest override = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage");
+
+        for (String role : new String[]{"OPERATOR", "REQUESTER", "VIEWER"}) {
+            StepVerifier.create(useCase.execute(UUID.randomUUID(), override, EXECUTOR, role)).expectError(FreezeOverrideNotPermittedException.class).verify();
+        }
+        verifyNoInteractions(changeRequestRepository, operationWindowServicePort);
+
+        UUID id = UUID.randomUUID();
+        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        for (String role : new String[]{"ADMIN", "SERVICE", null}) {
+            StepVerifier.create(useCase.execute(id, override, EXECUTOR, role)).expectError(ChangeRequestNotFoundException.class).verify();
+        }
+    }
+
+    @Test
+    @DisplayName("schedule: without an override nobody needs an elevated role")
+    void scheduleWithoutOverrideNeedsNoRole() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
+        cr.preApprove(EXECUTOR);
+        Instant start = Instant.now();
+        Instant end = start.plusSeconds(3600);
+        UUID windowId = UUID.randomUUID();
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, EXECUTOR, null))
+                .thenReturn(Mono.just(windowId));
+        when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort)
+                .execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, "VIEWER")).verifyComplete();
     }
 
     @Test
@@ -285,6 +321,6 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.empty());
         ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort);
 
-        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, null)).verifyComplete();
     }
 }
