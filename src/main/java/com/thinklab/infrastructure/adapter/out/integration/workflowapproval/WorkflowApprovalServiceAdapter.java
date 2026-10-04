@@ -1,7 +1,9 @@
 package com.thinklab.infrastructure.adapter.out.integration.workflowapproval;
 
+import com.thinklab.domain.exception.InvalidChangeRequestStatusException;
 import com.thinklab.domain.port.ApprovalServicePort;
 import io.micronaut.core.annotation.Introspected;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Header;
@@ -9,6 +11,7 @@ import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Put;
 import io.micronaut.http.client.annotation.Client;
+import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -17,6 +20,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -62,7 +66,19 @@ public class WorkflowApprovalServiceAdapter implements ApprovalServicePort {
         return apiClient.captureDecision(approvalRequestId, executor, new CaptureDecisionApiRequest(outcome.name(), comment))
                 .map(response -> ApprovalOutcome.valueOf(response.status()))
                 .doOnError(error -> log.error("[INTEGRATION FAILURE] Failed to capture decision for ApprovalRequest: {}", approvalRequestId, error))
-                .onErrorMap(error -> new IllegalStateException("Dependency Failure: Workflow Approval Service is currently unavailable", error));
+                .onErrorMap(WorkflowApprovalServiceAdapter::relayConflict);
+    }
+
+    /**
+     * A 409 from workflow-approval on a decision (an approver who is not eligible, an approval already decided) is a refusal the caller
+     * should read, so it is relayed as this service's own 409 with the reason; any other failure stays a dependency failure.
+     */
+    static Throwable relayConflict(Throwable error) {
+        if (error instanceof HttpClientResponseException http && http.getStatus() == HttpStatus.CONFLICT) {
+            String reason = http.getResponse().getBody(Map.class).map(body -> body.get("detail")).map(String::valueOf).orElse(http.getMessage());
+            return new InvalidChangeRequestStatusException(reason);
+        }
+        return new IllegalStateException("Dependency Failure: Workflow Approval Service is currently unavailable", error);
     }
 
     @Serdeable
