@@ -22,10 +22,10 @@ public interface ApprovalServicePort {
 
     /**
      * BIAN Behavior Qualifier {@code decision/capture} on workflow-approval-service. Forwards one
-     * approver's decision and returns the ApprovalRequest's post-decision {@link ApprovalOutcome},
+     * approver's decision, in the tenant of the change, and returns the ApprovalRequest's post-decision {@link ApprovalOutcome},
      * read back in the same request/response cycle so the caller can react immediately.
      */
-    Mono<ApprovalOutcome> captureDecision(UUID approvalRequestId, UUID approverId, DecisionOutcome outcome, String comment, String executor);
+    Mono<ApprovalOutcome> captureDecision(UUID organisationId, UUID approvalRequestId, UUID approverId, DecisionOutcome outcome, String comment, String executor);
 
     /**
      * BIAN Behavior Qualifier {@code policy/retrieve} on workflow-approval-service. Everyone who is an approver of ANY stage of the

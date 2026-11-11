@@ -84,14 +84,15 @@ class WorkflowApprovalServiceAdapterTest {
     void captureDecision() {
         UUID approvalRequestId = UUID.randomUUID();
         UUID approverId = UUID.randomUUID();
-        when(apiClient.captureDecision(any(), any(), any())).thenReturn(Mono.just(new ApprovalRequestApiResponse(approvalRequestId, "APPROVED")));
+        UUID organisationId = UUID.randomUUID();
+        when(apiClient.captureDecision(any(), any(), any(), any())).thenReturn(Mono.just(new ApprovalRequestApiResponse(approvalRequestId, "APPROVED")));
 
-        StepVerifier.create(adapter.captureDecision(approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", "op-1"))
+        StepVerifier.create(adapter.captureDecision(organisationId, approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", "op-1"))
                 .expectNext(ApprovalOutcome.APPROVED)
                 .verifyComplete();
 
         ArgumentCaptor<CaptureDecisionApiRequest> captor = ArgumentCaptor.forClass(CaptureDecisionApiRequest.class);
-        verify(apiClient).captureDecision(eq(approvalRequestId), eq("op-1"), captor.capture());
+        verify(apiClient).captureDecision(eq(approvalRequestId), eq(organisationId.toString()), eq("op-1"), captor.capture());
         assertEquals("APPROVE", captor.getValue().outcome());
         assertEquals("ok", captor.getValue().comment());
     }
@@ -102,22 +103,22 @@ class WorkflowApprovalServiceAdapterTest {
         var withBody = new HttpClientResponseException("Conflict", HttpResponse.status(HttpStatus.CONFLICT).body(Map.of("detail", "approver is not eligible")));
         var withoutBody = new HttpClientResponseException("Conflict without body", HttpResponse.status(HttpStatus.CONFLICT));
         var notFound = new HttpClientResponseException("Not Found", HttpResponse.status(HttpStatus.NOT_FOUND));
-        when(apiClient.captureDecision(any(), any(), any())).thenReturn(Mono.error(withBody)).thenReturn(Mono.error(withoutBody)).thenReturn(Mono.error(notFound));
+        when(apiClient.captureDecision(any(), any(), any(), any())).thenReturn(Mono.error(withBody)).thenReturn(Mono.error(withoutBody)).thenReturn(Mono.error(notFound));
 
-        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
+        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
                 .expectErrorSatisfies(error -> { assertInstanceOf(InvalidChangeRequestStatusException.class, error); assertEquals("approver is not eligible", error.getMessage()); }).verify();
-        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
+        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
                 .expectErrorSatisfies(error -> { assertInstanceOf(InvalidChangeRequestStatusException.class, error); assertEquals("Conflict without body", error.getMessage()); }).verify();
-        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
+        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.APPROVE, null, "op-1"))
                 .expectErrorSatisfies(error -> assertInstanceOf(IllegalStateException.class, error)).verify();
     }
 
     @Test
     @DisplayName("captureDecision hides infrastructure failures behind a dependency-failure error")
     void captureDecisionFailure() {
-        when(apiClient.captureDecision(any(), any(), any())).thenReturn(Mono.error(new RuntimeException("timeout")));
+        when(apiClient.captureDecision(any(), any(), any(), any())).thenReturn(Mono.error(new RuntimeException("timeout")));
 
-        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.REJECT, null, "op-1"))
+        StepVerifier.create(adapter.captureDecision(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), DecisionOutcome.REJECT, null, "op-1"))
                 .expectErrorSatisfies(error -> {
                     assertInstanceOf(IllegalStateException.class, error);
                     assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable"));

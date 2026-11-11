@@ -46,7 +46,7 @@ public class CaptureApprovalDecisionUseCase {
                         return Mono.error(new InvalidChangeRequestStatusException(
                                 "Illegal transition: no approval is currently in progress for this ChangeRequest."));
                     }
-                    return approvalServicePort.captureDecision(changeRequest.getApprovalRequestId(), approverId, request.outcome(), request.comment(), executor)
+                    return approvalServicePort.captureDecision(changeRequest.getOrganisationId(), changeRequest.getApprovalRequestId(), approverId, request.outcome(), request.comment(), executor)
                             .flatMap(outcome -> applyOutcome(changeRequest, outcome, executor));
                 });
     }
