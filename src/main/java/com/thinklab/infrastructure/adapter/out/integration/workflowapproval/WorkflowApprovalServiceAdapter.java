@@ -59,11 +59,11 @@ public class WorkflowApprovalServiceAdapter implements ApprovalServicePort {
     }
 
     @Override
-    public Mono<ApprovalOutcome> captureDecision(UUID approvalRequestId, UUID approverId, DecisionOutcome outcome, String comment, String executor) {
+    public Mono<ApprovalOutcome> captureDecision(UUID organisationId, UUID approvalRequestId, UUID approverId, DecisionOutcome outcome, String comment, String executor) {
         log.debug("[INTEGRATION] Forwarding decision [{}] from approver [{}] to workflow-approval-service for ApprovalRequest: {}",
                 outcome, approverId, approvalRequestId);
 
-        return apiClient.captureDecision(approvalRequestId, executor, new CaptureDecisionApiRequest(outcome.name(), comment))
+        return apiClient.captureDecision(approvalRequestId, organisationId.toString(), executor, new CaptureDecisionApiRequest(outcome.name(), comment))
                 .map(response -> ApprovalOutcome.valueOf(response.status()))
                 .doOnError(error -> log.error("[INTEGRATION FAILURE] Failed to capture decision for ApprovalRequest: {}", approvalRequestId, error))
                 .onErrorMap(WorkflowApprovalServiceAdapter::relayConflict);
@@ -138,6 +138,7 @@ interface WorkflowApprovalApiClient {
     @Put("/{id}/decision/capture")
     Mono<WorkflowApprovalServiceAdapter.ApprovalRequestApiResponse> captureDecision(
             @PathVariable UUID id,
+            @Header("X-Tenant-Id") String tenantId,
             @Header("X-Executor") String executor,
             @Body WorkflowApprovalServiceAdapter.CaptureDecisionApiRequest request
     );

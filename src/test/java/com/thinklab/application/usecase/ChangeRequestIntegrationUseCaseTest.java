@@ -172,7 +172,7 @@ class ChangeRequestIntegrationUseCaseTest {
         cr.routeForApproval(approvalRequestId, EXECUTOR);
         UUID approverId = UUID.randomUUID();
         when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
-        when(approvalServicePort.captureDecision(approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", EXECUTOR))
+        when(approvalServicePort.captureDecision(organisationId, approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", EXECUTOR))
                 .thenReturn(Mono.just(ApprovalOutcome.APPROVED));
         lenient().when(changeRequestRepository.updateStatus(eq(cr.getId()), eq(ChangeStatus.APPROVED), any())).thenReturn(Mono.empty());
         CaptureApprovalDecisionUseCase useCase = new CaptureApprovalDecisionUseCase(changeRequestRepository, approvalServicePort);
@@ -190,7 +190,7 @@ class ChangeRequestIntegrationUseCaseTest {
         cr.routeForApproval(approvalRequestId, EXECUTOR);
         UUID approverId = UUID.randomUUID();
         when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
-        when(approvalServicePort.captureDecision(approvalRequestId, approverId, DecisionOutcome.REJECT, null, EXECUTOR))
+        when(approvalServicePort.captureDecision(organisationId, approvalRequestId, approverId, DecisionOutcome.REJECT, null, EXECUTOR))
                 .thenReturn(Mono.just(ApprovalOutcome.REJECTED));
         lenient().when(changeRequestRepository.updateStatus(eq(cr.getId()), eq(ChangeStatus.REJECTED), any())).thenReturn(Mono.empty());
         CaptureApprovalDecisionUseCase useCase = new CaptureApprovalDecisionUseCase(changeRequestRepository, approvalServicePort);
@@ -208,7 +208,7 @@ class ChangeRequestIntegrationUseCaseTest {
         cr.routeForApproval(approvalRequestId, EXECUTOR);
         UUID approverId = UUID.randomUUID();
         when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
-        when(approvalServicePort.captureDecision(approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", EXECUTOR))
+        when(approvalServicePort.captureDecision(organisationId, approvalRequestId, approverId, DecisionOutcome.APPROVE, "ok", EXECUTOR))
                 .thenReturn(Mono.just(ApprovalOutcome.PENDING));
         CaptureApprovalDecisionUseCase useCase = new CaptureApprovalDecisionUseCase(changeRequestRepository, approvalServicePort);
 
