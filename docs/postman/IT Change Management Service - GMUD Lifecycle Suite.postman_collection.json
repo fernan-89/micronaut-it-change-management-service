@@ -1563,10 +1563,6 @@
               {
                 "key": "X-Executor",
                 "value": "{{executor}}"
-              },
-              {
-                "key": "X-Tenant-Id",
-                "value": "{{organisationId}}"
               }
             ],
             "method": "POST",
