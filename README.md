@@ -98,7 +98,7 @@ verbatim to workflow-approval-service - not an operator identity (ADR-032). Ther
 |---|---|---|
 | `ERR-CHG-00404` | 404 | ChangeRequest not found |
 | `ERR-CHG-00403` | 403 | A freeze override was requested by someone who is neither ADMIN/SERVICE nor on the ECAB (ADR-035/036); the change can still be scheduled without it |
-| `ERR-CHG-00409` | 409 | Illegal lifecycle transition, missing approval-in-progress, or a scheduling collision surfaced by operation-window-service (ADR-019/ADR-033) |
+| `ERR-CHG-00409` | 409 | Illegal lifecycle transition, missing approval-in-progress, a scheduling collision surfaced by operation-window-service (ADR-019/ADR-033), or a simultaneous request that lost the race for the same change (guarded writes and the remote-step lease, ADR-037) |
 | `ERR-VALIDATION-00400` | 400 | Payload/header/identifier validation failure |
 | `ERR-INTERNAL-00500` | 500 | Unexpected technical failure |
 

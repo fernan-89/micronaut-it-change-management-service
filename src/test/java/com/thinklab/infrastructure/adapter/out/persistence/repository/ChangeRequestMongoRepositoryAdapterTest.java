@@ -7,6 +7,7 @@ import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoCollection;
 import com.mongodb.reactivestreams.client.MongoDatabase;
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
+import com.thinklab.domain.exception.InvalidChangeRequestStatusException;
 import com.thinklab.domain.model.ChangeRequest;
 import com.thinklab.domain.model.ChangeRequest.ChangeRequestAuditEntry;
 import com.thinklab.domain.model.ChangeRequest.ChangeStatus;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
@@ -32,6 +34,8 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -192,13 +196,57 @@ class ChangeRequestMongoRepositoryAdapterTest {
     }
 
     @Test
-    @DisplayName("a zero-matched update translates into ChangeRequestNotFoundException")
+    @DisplayName("a guarded write that matches nothing is a 404 when the change does not exist and a conflict when it does")
     void zeroMatchedUpdate() {
         when(mongoCollection.updateOne(any(Bson.class), any(Bson.class)))
                 .thenReturn(Mono.just(UpdateResult.acknowledged(0, 0L, null)));
 
+        when(mongoCollection.countDocuments(any(Bson.class))).thenReturn(Mono.just(0L));
         StepVerifier.create(adapter.updateStatus(changeRequestId, ChangeStatus.SUBMITTED, entry))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
+
+        when(mongoCollection.countDocuments(any(Bson.class))).thenReturn(Mono.just(1L));
+        StepVerifier.create(adapter.updateStatus(changeRequestId, ChangeStatus.SUBMITTED, entry))
+                .expectError(InvalidChangeRequestStatusException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("every write filters on the id and on the status that was read (the audit entry's fromStatus)")
+    void writesFilterOnTheStatusRead() {
+        when(mongoCollection.updateOne(any(Bson.class), any(Bson.class))).thenReturn(Mono.just(UpdateResult.acknowledged(1, 1L, null)));
+
+        StepVerifier.create(adapter.updateStatus(changeRequestId, ChangeStatus.SUBMITTED, entry)).verifyComplete();
+
+        ArgumentCaptor<Bson> filter = ArgumentCaptor.forClass(Bson.class);
+        verify(mongoCollection).updateOne(filter.capture(), any(Bson.class));
+        String json = filter.getValue().toBsonDocument(org.bson.BsonDocument.class, org.bson.codecs.configuration.CodecRegistries.fromRegistries(org.bson.codecs.configuration.CodecRegistries.fromCodecs(new org.bson.codecs.UuidCodec(org.bson.UuidRepresentation.STANDARD)), com.mongodb.MongoClientSettings.getDefaultCodecRegistry())).toJson();
+        assertTrue(json.contains("_id") && json.contains("DRAFT"), json);
+    }
+
+    @Test
+    @DisplayName("the remote-step lease: taken when no live lease is held, a conflict (or 404) when it is not, and release never fails")
+    void remoteStepLease() {
+        when(mongoCollection.updateOne(any(Bson.class), any(Bson.class)))
+                .thenReturn(Mono.just(UpdateResult.acknowledged(1, 1L, null)))
+                .thenReturn(Mono.just(UpdateResult.acknowledged(0, 0L, null)))
+                .thenReturn(Mono.just(UpdateResult.acknowledged(0, 0L, null)));
+        when(mongoCollection.countDocuments(any(Bson.class))).thenReturn(Mono.just(1L)).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(adapter.acquireRemoteStepLease(changeRequestId, ChangeStatus.APPROVED)).verifyComplete();
+        StepVerifier.create(adapter.acquireRemoteStepLease(changeRequestId, ChangeStatus.APPROVED)).expectError(InvalidChangeRequestStatusException.class).verify();
+        StepVerifier.create(adapter.acquireRemoteStepLease(changeRequestId, ChangeStatus.APPROVED)).expectError(ChangeRequestNotFoundException.class).verify();
+    }
+
+    @Test
+    @DisplayName("releasing the lease succeeds, and a failure to release is swallowed")
+    void releaseNeverFails() {
+        when(mongoCollection.updateOne(any(Bson.class), any(Bson.class)))
+                .thenReturn(Mono.just(UpdateResult.acknowledged(1, 1L, null)))
+                .thenReturn(Mono.error(new IllegalStateException("database down")));
+
+        StepVerifier.create(adapter.releaseRemoteStepLease(changeRequestId)).verifyComplete();
+        StepVerifier.create(adapter.releaseRemoteStepLease(changeRequestId)).verifyComplete();
     }
 }
