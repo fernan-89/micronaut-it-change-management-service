@@ -33,10 +33,10 @@ public class RetrieveChangeRequestAuditLogUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<List<ChangeRequestAuditEntryResponse>> execute(UUID id) {
+    public Mono<List<ChangeRequestAuditEntryResponse>> execute(UUID id, UUID organisationId) {
         log.info("[USE CASE] Retrieving audit ledger for ChangeRequest ID: {}", id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .map(changeRequest -> changeRequest.getAuditTrail().stream().map(ChangeRequestMapper::toResponse).collect(Collectors.toList()));
     }

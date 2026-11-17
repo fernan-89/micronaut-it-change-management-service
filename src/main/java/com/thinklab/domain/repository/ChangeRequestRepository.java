@@ -25,7 +25,7 @@ public interface ChangeRequestRepository {
 
     Mono<ChangeRequest> create(ChangeRequest changeRequest);
 
-    Mono<ChangeRequest> findById(UUID id);
+    Mono<ChangeRequest> findById(UUID id, UUID organisationId);
 
     Flux<ChangeRequest> findAllByOrganisationId(UUID organisationId, ChangeStatus status);
 

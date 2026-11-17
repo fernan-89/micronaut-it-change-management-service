@@ -27,10 +27,10 @@ public class ControlChangeRequestUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<Void> execute(UUID id, Action action, String executor) {
+    public Mono<Void> execute(UUID id, UUID organisationId, Action action, String executor) {
         log.info("[USE CASE] Controlling ChangeRequest lifecycle: {} for ID: {}", action, id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     ChangeRequestAuditEntry entry = action.apply(changeRequest, executor);

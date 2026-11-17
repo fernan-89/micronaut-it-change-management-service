@@ -43,15 +43,15 @@ public class ScheduleChangeRequestUseCase {
      * @param role the verified role (X-Role) of the caller, {@code null} when security is off; only needed to decide whether a
      *             freeze override may be requested (ADR-035)
      */
-    public Mono<Void> execute(UUID id, ScheduleChangeRequestRequest request, String executor, String role) {
+    public Mono<Void> execute(UUID id, UUID organisationId, ScheduleChangeRequestRequest request, String executor, String role) {
         log.info("[USE CASE] Scheduling ChangeRequest ID: {} from {} to {}", id, request.plannedStart(), request.plannedEnd());
 
         if (request.freezeOverrideJustification() == null || FreezeOverridePolicy.permits(role)) {
-            return reserve(id, request, executor);
+            return reserve(id, organisationId, request, executor);
         }
         // Below ADMIN a freeze can still be waived by someone who sits on the ECAB (ADR-036): they are the people the tenant already
         // trusts to approve an emergency, so no role of its own is needed.
-        return isEcabMember(executor).flatMap(member -> member ? reserve(id, request, executor) : Mono.error(new FreezeOverrideNotPermittedException(role)));
+        return isEcabMember(executor).flatMap(member -> member ? reserve(id, organisationId, request, executor) : Mono.error(new FreezeOverrideNotPermittedException(role)));
     }
 
     /** Fail-closed: this is a privilege, so when the ECAB cannot be read (not configured, service down) the answer is no. */
@@ -67,8 +67,8 @@ public class ScheduleChangeRequestUseCase {
                 });
     }
 
-    private Mono<Void> reserve(UUID id, ScheduleChangeRequestRequest request, String executor) {
-        return changeRequestRepository.findById(id)
+    private Mono<Void> reserve(UUID id, UUID organisationId, ScheduleChangeRequestRequest request, String executor) {
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     // Before anything is reserved remotely: an override on a non-EMERGENCY or non-APPROVED change must not leak a window.

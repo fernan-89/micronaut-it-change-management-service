@@ -70,7 +70,7 @@ payload or talk to another Service Domain (ADR-030).
 
 ## BIAN Behavior Qualifier Contract (`/it-change-management/v1`)
 
-`X-Tenant-Id` is mandatory on `initiate` and the collection `retrieve`; `X-Executor` is mandatory on
+`X-Tenant-Id` is mandatory on every route (ADR-038: another tenant's change is a 404); `X-Executor` is mandatory on
 every mutation. On `approval/capture`, `X-Executor` is the approver's own sovereign id, forwarded
 verbatim to workflow-approval-service - not an operator identity (ADR-032). There is no `DELETE`.
 

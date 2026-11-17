@@ -23,10 +23,10 @@ public class RetrieveChangeRequestUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<ChangeRequestResponse> execute(UUID id) {
+    public Mono<ChangeRequestResponse> execute(UUID id, UUID organisationId) {
         log.info("[USE CASE] Retrieving ChangeRequest by ID: {}", id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .map(ChangeRequestMapper::toResponse);
     }

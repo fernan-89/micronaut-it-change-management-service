@@ -22,10 +22,10 @@ public class RollbackChangeRequestUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<Void> execute(UUID id, RollbackChangeRequestRequest request, String executor) {
+    public Mono<Void> execute(UUID id, UUID organisationId, RollbackChangeRequestRequest request, String executor) {
         log.info("[USE CASE] Rolling back ChangeRequest ID: {}", id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     var entry = changeRequest.rollback(request.reason(), executor);
