@@ -135,7 +135,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
         ChangeRequest created = changeRequests.create(newChangeRequest(UUID.randomUUID(), UUID.randomUUID())).block();
 
         changeRequests.updateRollback(created.getId(), "failed midway",
-                ChangeStatus.ROLLED_BACK, audit("ROLLED_BACK", ChangeStatus.IN_PROGRESS, ChangeStatus.ROLLED_BACK)).block();
+                ChangeStatus.ROLLED_BACK, audit("ROLLED_BACK", ChangeStatus.DRAFT, ChangeStatus.ROLLED_BACK)).block();
 
         ChangeRequest found = changeRequests.findById(created.getId()).block();
         assertEquals(ChangeStatus.ROLLED_BACK, found.getStatus());
@@ -179,5 +179,34 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
 
     private static Set<UUID> ids(List<ChangeRequest> list) {
         return list.stream().map(ChangeRequest::getId).collect(Collectors.toSet());
+    }
+
+    @Test
+    @DisplayName("a guarded write applies only if the change still has the status that was read: otherwise 409, and a 404 only when it does not exist")
+    void guardedWrites() {
+        ChangeRequest created = changeRequests.create(newChangeRequest(UUID.randomUUID(), UUID.randomUUID())).block();
+        changeRequests.updateStatus(created.getId(), ChangeStatus.CANCELLED, audit("CANCELLED", ChangeStatus.DRAFT, ChangeStatus.CANCELLED)).block();
+
+        assertThrows(com.thinklab.domain.exception.InvalidChangeRequestStatusException.class,
+                () -> changeRequests.updateStatus(created.getId(), ChangeStatus.SUBMITTED, audit("SUBMITTED", ChangeStatus.DRAFT, ChangeStatus.SUBMITTED)).block());
+        assertEquals(ChangeStatus.CANCELLED, changeRequests.findById(created.getId()).block().getStatus());
+    }
+
+    @Test
+    @DisplayName("the remote-step lease is exclusive, is given back by release and by the write that finishes the step, and is refused when the status moved")
+    void remoteStepLease() {
+        ChangeRequest created = changeRequests.create(newChangeRequest(UUID.randomUUID(), UUID.randomUUID())).block();
+
+        changeRequests.acquireRemoteStepLease(created.getId(), ChangeStatus.DRAFT).block();
+        assertThrows(com.thinklab.domain.exception.InvalidChangeRequestStatusException.class,
+                () -> changeRequests.acquireRemoteStepLease(created.getId(), ChangeStatus.DRAFT).block());
+        changeRequests.releaseRemoteStepLease(created.getId()).block();
+        changeRequests.acquireRemoteStepLease(created.getId(), ChangeStatus.DRAFT).block();
+        changeRequests.updateRouting(created.getId(), UUID.randomUUID(), ChangeStatus.CAB_REVIEW, audit("ROUTED", ChangeStatus.DRAFT, ChangeStatus.CAB_REVIEW)).block();
+        assertThrows(com.thinklab.domain.exception.InvalidChangeRequestStatusException.class,
+                () -> changeRequests.acquireRemoteStepLease(created.getId(), ChangeStatus.DRAFT).block());
+        changeRequests.acquireRemoteStepLease(created.getId(), ChangeStatus.CAB_REVIEW).block();
+        assertThrows(ChangeRequestNotFoundException.class, () -> changeRequests.acquireRemoteStepLease(UUID.randomUUID(), ChangeStatus.DRAFT).block());
+        changeRequests.releaseRemoteStepLease(UUID.randomUUID()).block();
     }
 }

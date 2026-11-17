@@ -7,6 +7,7 @@ import com.mongodb.client.model.Updates;
 import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoCollection;
 import com.thinklab.domain.exception.ChangeRequestNotFoundException;
+import com.thinklab.domain.exception.InvalidChangeRequestStatusException;
 import com.thinklab.domain.model.ChangeRequest;
 import com.thinklab.domain.model.ChangeRequest.ChangeRequestAuditEntry;
 import com.thinklab.domain.model.ChangeRequest.ChangeStatus;
@@ -44,6 +45,9 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
     private static final Logger log = LoggerFactory.getLogger(ChangeRequestMongoRepositoryAdapter.class);
     static final String DEFAULT_DATABASE = "thinklab_it_change_management_db";
     static final String COLLECTION_NAME = "change_requests";
+    /** The short exclusive lease a remote step (approval request, window reservation) holds on a change; not part of the domain. */
+    static final String FIELD_LEASE = "remoteStepLeaseUntil";
+    static final java.time.Duration REMOTE_STEP_LEASE = java.time.Duration.ofMinutes(2);
     private static final String FIELD_ID = "_id";
     private static final String FIELD_UPDATED_AT = "updatedAt";
     private static final String FIELD_AUDIT_TRAIL = "auditTrail";
@@ -102,7 +106,7 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -112,7 +116,7 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -124,18 +128,19 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
     public Mono<Void> updateRouting(UUID id, UUID approvalRequestId, ChangeStatus status, ChangeRequestAuditEntry auditEntry) {
         Bson update = Updates.combine(
                 Updates.set("approvalRequestId", approvalRequestId),
+                Updates.unset(FIELD_LEASE),
                 Updates.set("status", status.name()),
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -144,11 +149,12 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set("operationWindowId", operationWindowId),
                 Updates.set("plannedStart", plannedStart),
                 Updates.set("plannedEnd", plannedEnd),
+                Updates.unset(FIELD_LEASE),
                 Updates.set("status", status.name()),
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -159,7 +165,7 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -170,7 +176,7 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
     @Override
@@ -181,16 +187,36 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
                 Updates.set(FIELD_UPDATED_AT, Instant.now()),
                 Updates.push(FIELD_AUDIT_TRAIL, AuditEntryDocument.fromDomain(auditEntry))
         );
-        return executeUpdate(id, update);
+        return executeUpdate(id, auditEntry, update);
     }
 
-    private Mono<Void> executeUpdate(UUID id, Bson update) {
-        return Mono.from(getCollection().updateOne(Filters.eq(FIELD_ID, id), update))
-                .flatMap(result -> {
-                    if (result.getMatchedCount() == 0) {
-                        return Mono.error(new ChangeRequestNotFoundException(id));
-                    }
-                    return Mono.empty();
-                });
+    @Override
+    public Mono<Void> acquireRemoteStepLease(UUID id, ChangeStatus expectedStatus) {
+        Instant now = Instant.now();
+        Bson guard = Filters.and(Filters.eq("status", expectedStatus.name()),
+                Filters.or(Filters.exists(FIELD_LEASE, false), Filters.lt(FIELD_LEASE, now)));
+        return Mono.from(getCollection().updateOne(Filters.and(Filters.eq(FIELD_ID, id), guard), Updates.set(FIELD_LEASE, now.plus(REMOTE_STEP_LEASE))))
+                .flatMap(result -> result.getMatchedCount() > 0 ? Mono.<Void>empty() : missed(id, "another request is already working on this change, or it was changed"));
+    }
+
+    @Override
+    public Mono<Void> releaseRemoteStepLease(UUID id) {
+        return Mono.from(getCollection().updateOne(Filters.eq(FIELD_ID, id), Updates.unset(FIELD_LEASE))).then()
+                .onErrorResume(failure -> Mono.empty());
+    }
+
+    /** A guarded write: the id and the status that was read. */
+    private Mono<Void> executeUpdate(UUID id, ChangeRequestAuditEntry auditEntry, Bson update) {
+        Bson filter = Filters.and(Filters.eq(FIELD_ID, id), Filters.eq("status", auditEntry.fromStatus().name()));
+        return Mono.from(getCollection().updateOne(filter, update))
+                .flatMap(result -> result.getMatchedCount() > 0 ? Mono.<Void>empty() : missed(id, "the change was changed by someone else while this change was being recorded"));
+    }
+
+    /** No match is a 404 when the change does not exist and a conflict when it does (someone else got there first). */
+    private Mono<Void> missed(UUID id, String why) {
+        return Mono.from(getCollection().countDocuments(Filters.eq(FIELD_ID, id)))
+                .flatMap(count -> count == 0
+                        ? Mono.<Void>error(new ChangeRequestNotFoundException(id))
+                        : Mono.<Void>error(new InvalidChangeRequestStatusException("Conflict: " + why + "; read it again and retry.")));
     }
 }

@@ -61,12 +61,15 @@ public class RouteForApprovalUseCase {
                                 "Dependency Failure: no ApprovalPolicy configured for change type " + changeRequest.getChangeType()));
                     }
 
-                    return approvalServicePort.initiateApprovalRequest(
-                                    changeRequest.getOrganisationId(), id, changeRequest.getRequesterId(), policyId, executor)
-                            .flatMap(approvalRequestId -> {
-                                var entry = changeRequest.routeForApproval(approvalRequestId, executor);
-                                return changeRequestRepository.updateRouting(id, approvalRequestId, changeRequest.getStatus(), entry);
-                            });
+                    // The lease first: only one of simultaneous requests may file an approval request; the others are refused (409) before filing any.
+                    return changeRequestRepository.acquireRemoteStepLease(id, changeRequest.getStatus())
+                            .then(Mono.defer(() -> approvalServicePort.initiateApprovalRequest(
+                                            changeRequest.getOrganisationId(), id, changeRequest.getRequesterId(), policyId, executor)
+                                    .flatMap(approvalRequestId -> {
+                                        var entry = changeRequest.routeForApproval(approvalRequestId, executor);
+                                        return changeRequestRepository.updateRouting(id, approvalRequestId, changeRequest.getStatus(), entry);
+                                    })
+                                    .onErrorResume(failure -> changeRequestRepository.releaseRemoteStepLease(id).then(Mono.error(failure)))));
                 });
     }
 }

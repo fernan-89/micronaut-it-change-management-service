@@ -73,15 +73,18 @@ public class ScheduleChangeRequestUseCase {
                 .flatMap(changeRequest -> {
                     // Before anything is reserved remotely: an override on a non-EMERGENCY or non-APPROVED change must not leak a window.
                     changeRequest.validateFreezeOverride(request.freezeOverrideJustification());
-                    return operationWindowServicePort.reserveImplementationWindow(
-                                    changeRequest.getOrganisationId(), changeRequest.getTitle(), changeRequest.getTargetAssetIds(),
-                                    request.plannedStart(), request.plannedEnd(), executor, request.freezeOverrideJustification())
-                            .flatMap(operationWindowId -> {
-                                var entry = changeRequest.schedule(operationWindowId, request.plannedStart(), request.plannedEnd(),
-                                        executor, request.freezeOverrideJustification());
-                                return changeRequestRepository.updateScheduling(
-                                        id, operationWindowId, request.plannedStart(), request.plannedEnd(), changeRequest.getStatus(), entry);
-                            });
+                    // The lease first: only one of simultaneous requests may reserve a window; the others are refused (409) before reserving any.
+                    return changeRequestRepository.acquireRemoteStepLease(id, changeRequest.getStatus())
+                            .then(Mono.defer(() -> operationWindowServicePort.reserveImplementationWindow(
+                                            changeRequest.getOrganisationId(), changeRequest.getTitle(), changeRequest.getTargetAssetIds(),
+                                            request.plannedStart(), request.plannedEnd(), executor, request.freezeOverrideJustification())
+                                    .flatMap(operationWindowId -> {
+                                        var entry = changeRequest.schedule(operationWindowId, request.plannedStart(), request.plannedEnd(),
+                                                executor, request.freezeOverrideJustification());
+                                        return changeRequestRepository.updateScheduling(
+                                                id, operationWindowId, request.plannedStart(), request.plannedEnd(), changeRequest.getStatus(), entry);
+                                    })
+                                    .onErrorResume(failure -> changeRequestRepository.releaseRemoteStepLease(id).then(Mono.error(failure)))));
                 });
     }
 }

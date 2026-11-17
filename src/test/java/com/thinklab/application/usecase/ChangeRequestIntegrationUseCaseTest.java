@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -55,6 +56,8 @@ class ChangeRequestIntegrationUseCaseTest {
     void setUp() {
         organisationId = UUID.randomUUID();
         requesterId = UUID.randomUUID();
+        lenient().when(changeRequestRepository.acquireRemoteStepLease(any(), any())).thenReturn(Mono.empty());
+        lenient().when(changeRequestRepository.releaseRemoteStepLease(any())).thenReturn(Mono.empty());
     }
 
     private ChangeRequest assessedChangeRequest(ChangeType type) {
@@ -136,6 +139,36 @@ class ChangeRequestIntegrationUseCaseTest {
         StepVerifier.create(nullConfigured.execute(nullConfig.getId(), EXECUTOR))
                 .expectError(IllegalStateException.class)
                 .verify();
+    }
+
+    @Test
+    @DisplayName("routeForApproval: a lease lost to a simultaneous request is a conflict and no approval request is filed")
+    void routeLosesTheLease() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.NORMAL);
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.acquireRemoteStepLease(cr.getId(), ChangeStatus.ASSESSED))
+                .thenReturn(Mono.error(new InvalidChangeRequestStatusException("another request is already working on this change")));
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+
+        StepVerifier.create(useCase.execute(cr.getId(), EXECUTOR)).expectError(InvalidChangeRequestStatusException.class).verify();
+
+        verifyNoInteractions(approvalServicePort);
+        verify(changeRequestRepository, never()).releaseRemoteStepLease(any());
+        verify(changeRequestRepository, never()).updateRouting(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("routeForApproval: a failing approval service gives the lease back and the failure reaches the caller")
+    void routeReleasesTheLeaseWhenTheRemoteFails() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.NORMAL);
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(approvalServicePort.initiateApprovalRequest(any(), any(), any(), any(), any())).thenReturn(Mono.error(new IllegalStateException("approval service down")));
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+
+        StepVerifier.create(useCase.execute(cr.getId(), EXECUTOR)).expectError(IllegalStateException.class).verify();
+
+        verify(changeRequestRepository).releaseRemoteStepLease(cr.getId());
+        verify(changeRequestRepository, never()).updateRouting(any(), any(), any(), any());
     }
 
     // --- CaptureApprovalDecisionUseCase ---
@@ -361,5 +394,41 @@ class ChangeRequestIntegrationUseCaseTest {
         ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
 
         StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, null)).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("schedule: a lease lost to a simultaneous request is a conflict and no window is reserved")
+    void scheduleLosesTheLease() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
+        cr.preApprove(EXECUTOR);
+        Instant start = Instant.now();
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.acquireRemoteStepLease(cr.getId(), ChangeStatus.APPROVED))
+                .thenReturn(Mono.error(new InvalidChangeRequestStatusException("another request is already working on this change")));
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, start.plusSeconds(3600)), EXECUTOR, null))
+                .expectError(InvalidChangeRequestStatusException.class).verify();
+
+        verifyNoInteractions(operationWindowServicePort);
+        verify(changeRequestRepository, never()).releaseRemoteStepLease(any());
+    }
+
+    @Test
+    @DisplayName("schedule: a refused reservation (a collision, a freeze) gives the lease back and the failure reaches the caller")
+    void scheduleReleasesTheLeaseWhenTheReservationFails() {
+        ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
+        cr.preApprove(EXECUTOR);
+        Instant start = Instant.now();
+        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(operationWindowServicePort.reserveImplementationWindow(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(Mono.error(new IllegalStateException("window service down")));
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+
+        StepVerifier.create(useCase.execute(cr.getId(), new ScheduleChangeRequestRequest(start, start.plusSeconds(3600)), EXECUTOR, null))
+                .expectError(IllegalStateException.class).verify();
+
+        verify(changeRequestRepository).releaseRemoteStepLease(cr.getId());
+        verify(changeRequestRepository, never()).updateScheduling(any(), any(), any(), any(), any(), any());
     }
 }
