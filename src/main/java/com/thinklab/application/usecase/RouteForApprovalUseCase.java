@@ -44,10 +44,10 @@ public class RouteForApprovalUseCase {
         return (value == null || value.isBlank()) ? null : UUID.fromString(value);
     }
 
-    public Mono<Void> execute(UUID id, String executor) {
+    public Mono<Void> execute(UUID id, UUID organisationId, String executor) {
         log.info("[USE CASE] Routing ChangeRequest ID: {} for approval", id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     if (changeRequest.getChangeType() == ChangeType.STANDARD) {

@@ -72,7 +72,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
     void createAndFind() {
         ChangeRequest created = changeRequests.create(newChangeRequest(UUID.randomUUID(), UUID.randomUUID())).block();
 
-        ChangeRequest found = changeRequests.findById(created.getId()).block();
+        ChangeRequest found = changeRequests.findById(created.getId(), created.getOrganisationId()).block();
 
         assertEquals(created.getTitle(), found.getTitle());
         assertEquals(ChangeStatus.DRAFT, found.getStatus());
@@ -117,7 +117,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
                 audit("IMPLEMENTED", ChangeStatus.IN_PROGRESS, ChangeStatus.IMPLEMENTED)).block();
         changeRequests.updateClose(id, "closed", ChangeStatus.CLOSED, audit("CLOSED", ChangeStatus.IMPLEMENTED, ChangeStatus.CLOSED)).block();
 
-        ChangeRequest found = changeRequests.findById(id).block();
+        ChangeRequest found = changeRequests.findById(id, created.getOrganisationId()).block();
         assertEquals("New title", found.getTitle());
         assertEquals(RiskLevel.HIGH, found.getRiskLevel());
         assertEquals(ImpactLevel.MEDIUM, found.getImpactLevel());
@@ -137,7 +137,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
         changeRequests.updateRollback(created.getId(), "failed midway",
                 ChangeStatus.ROLLED_BACK, audit("ROLLED_BACK", ChangeStatus.DRAFT, ChangeStatus.ROLLED_BACK)).block();
 
-        ChangeRequest found = changeRequests.findById(created.getId()).block();
+        ChangeRequest found = changeRequests.findById(created.getId(), created.getOrganisationId()).block();
         assertEquals(ChangeStatus.ROLLED_BACK, found.getStatus());
         assertEquals("failed midway", found.getRollbackReason());
     }
@@ -157,11 +157,20 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
     }
 
     @Test
+    @DisplayName("a ChangeRequest is found by id for its own organisation only: another tenant's is the same as none")
+    void scopedToItsOrganisation() {
+        ChangeRequest created = changeRequests.create(newChangeRequest(UUID.randomUUID(), UUID.randomUUID())).block();
+
+        assertEquals(created.getId(), changeRequests.findById(created.getId(), created.getOrganisationId()).block().getId());
+        assertNull(changeRequests.findById(created.getId(), UUID.randomUUID()).block());
+    }
+
+    @Test
     @DisplayName("an unknown ChangeRequest is empty on read and ChangeRequestNotFoundException on update")
     void notFound() {
         UUID unknown = UUID.randomUUID();
 
-        assertNull(changeRequests.findById(unknown).block());
+        assertNull(changeRequests.findById(unknown, UUID.randomUUID()).block());
         assertThrows(ChangeRequestNotFoundException.class, () -> changeRequests.updateStatus(unknown, ChangeStatus.CANCELLED,
                 audit("CANCELLED", ChangeStatus.DRAFT, ChangeStatus.CANCELLED)).block());
     }
@@ -189,7 +198,7 @@ class ChangeRequestPersistenceIT implements TestPropertyProvider {
 
         assertThrows(com.thinklab.domain.exception.InvalidChangeRequestStatusException.class,
                 () -> changeRequests.updateStatus(created.getId(), ChangeStatus.SUBMITTED, audit("SUBMITTED", ChangeStatus.DRAFT, ChangeStatus.SUBMITTED)).block());
-        assertEquals(ChangeStatus.CANCELLED, changeRequests.findById(created.getId()).block().getStatus());
+        assertEquals(ChangeStatus.CANCELLED, changeRequests.findById(created.getId(), created.getOrganisationId()).block().getStatus());
     }
 
     @Test

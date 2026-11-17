@@ -126,12 +126,12 @@ class TransitionRaceIT implements TestPropertyProvider {
         ChangeRequest change = draft();
 
         List<String> results = outcomes(Flux.range(0, 10)
-                .flatMap(i -> control.execute(change.getId(), ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR).thenReturn("OK")
+                .flatMap(i -> control.execute(change.getId(), change.getOrganisationId(), ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR).thenReturn("OK")
                         .onErrorResume(e -> Mono.just(e.getClass().getSimpleName())), 10));
 
         assertEquals(1, results.stream().filter("OK"::equals).count(), results.toString());
         assertEquals(9, results.stream().filter(InvalidChangeRequestStatusException.class.getSimpleName()::equals).count(), results.toString());
-        ChangeRequest stored = repository.findById(change.getId()).block();
+        ChangeRequest stored = repository.findById(change.getId(), change.getOrganisationId()).block();
         assertEquals(ChangeStatus.SUBMITTED, stored.getStatus());
         assertEquals(2, stored.getAuditTrail().size(), "one entry for creating and one for the single submit that won");
     }
@@ -142,10 +142,10 @@ class TransitionRaceIT implements TestPropertyProvider {
         ChangeRequest change = draft();
 
         List<String> results = outcomes(Flux.just(ControlChangeRequestUseCase.Action.SUBMIT, ControlChangeRequestUseCase.Action.CANCEL)
-                .flatMap(action -> control.execute(change.getId(), action, EXECUTOR).thenReturn("OK").onErrorResume(e -> Mono.just("CONFLICT")), 2));
+                .flatMap(action -> control.execute(change.getId(), change.getOrganisationId(), action, EXECUTOR).thenReturn("OK").onErrorResume(e -> Mono.just("CONFLICT")), 2));
 
         assertEquals(1, results.stream().filter("OK"::equals).count(), results.toString());
-        ChangeRequest stored = repository.findById(change.getId()).block();
+        ChangeRequest stored = repository.findById(change.getId(), change.getOrganisationId()).block();
         assertEquals(2, stored.getAuditTrail().size());
         assertEquals(stored.getStatus(), stored.getAuditTrail().get(1).toStatus());
     }
@@ -157,11 +157,11 @@ class TransitionRaceIT implements TestPropertyProvider {
         int before = approvals.created.get();
 
         List<String> results = outcomes(Flux.range(0, 10)
-                .flatMap(i -> route.execute(change.getId(), EXECUTOR).thenReturn("OK").onErrorResume(e -> Mono.just(e.getClass().getSimpleName())), 10));
+                .flatMap(i -> route.execute(change.getId(), change.getOrganisationId(), EXECUTOR).thenReturn("OK").onErrorResume(e -> Mono.just(e.getClass().getSimpleName())), 10));
 
         assertEquals(1, results.stream().filter("OK"::equals).count(), results.toString());
         assertEquals(1, approvals.created.get() - before, "only one approval request may be filed for one change");
-        ChangeRequest stored = repository.findById(change.getId()).block();
+        ChangeRequest stored = repository.findById(change.getId(), change.getOrganisationId()).block();
         assertEquals(ChangeStatus.CAB_REVIEW, stored.getStatus());
     }
 
@@ -178,11 +178,11 @@ class TransitionRaceIT implements TestPropertyProvider {
         ScheduleChangeRequestRequest request = new ScheduleChangeRequestRequest(start, start.plusSeconds(3600), null);
 
         List<String> results = outcomes(Flux.range(0, 10)
-                .flatMap(i -> schedule.execute(change.getId(), request, EXECUTOR, "ADMIN").thenReturn("OK").onErrorResume(e -> Mono.just(e.getClass().getSimpleName())), 10));
+                .flatMap(i -> schedule.execute(change.getId(), change.getOrganisationId(), request, EXECUTOR, "ADMIN").thenReturn("OK").onErrorResume(e -> Mono.just(e.getClass().getSimpleName())), 10));
 
         assertEquals(1, results.stream().filter("OK"::equals).count(), results.toString());
         assertEquals(1, windows.reserved.get() - before, "only one window may be reserved for one change");
-        assertEquals(ChangeStatus.SCHEDULED, repository.findById(change.getId()).block().getStatus());
+        assertEquals(ChangeStatus.SCHEDULED, repository.findById(change.getId(), change.getOrganisationId()).block().getStatus());
         assertTrue(true);
     }
 }

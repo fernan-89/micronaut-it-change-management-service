@@ -22,10 +22,10 @@ public class AssessChangeRequestUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<Void> execute(UUID id, AssessChangeRequestRequest request, String executor) {
+    public Mono<Void> execute(UUID id, UUID organisationId, AssessChangeRequestRequest request, String executor) {
         log.info("[USE CASE] Assessing ChangeRequest ID: {} - risk: {}, impact: {}", id, request.riskLevel(), request.impactLevel());
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     var entry = changeRequest.assess(request.riskLevel(), request.impactLevel(), executor);

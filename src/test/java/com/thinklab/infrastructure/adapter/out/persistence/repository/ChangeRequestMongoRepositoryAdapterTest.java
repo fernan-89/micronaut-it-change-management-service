@@ -102,7 +102,7 @@ class ChangeRequestMongoRepositoryAdapterTest {
             return null;
         }).when(publisher).subscribe(any());
 
-        StepVerifier.create(adapter.findById(changeRequestId))
+        StepVerifier.create(adapter.findById(changeRequestId, changeRequest.getOrganisationId()))
                 .assertNext(found -> org.junit.jupiter.api.Assertions.assertEquals(changeRequestId, found.getId()))
                 .verifyComplete();
     }

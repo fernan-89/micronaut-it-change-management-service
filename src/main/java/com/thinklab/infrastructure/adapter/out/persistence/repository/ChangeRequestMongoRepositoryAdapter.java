@@ -81,8 +81,8 @@ public class ChangeRequestMongoRepositoryAdapter implements ChangeRequestReposit
     }
 
     @Override
-    public Mono<ChangeRequest> findById(UUID id) {
-        return Mono.from(getCollection().find(Filters.eq(FIELD_ID, id)).first())
+    public Mono<ChangeRequest> findById(UUID id, UUID organisationId) {
+        return Mono.from(getCollection().find(Filters.and(Filters.eq(FIELD_ID, id), Filters.eq("organisationId", organisationId))).first())
                 .map(ChangeRequestPersistenceMapper::toDomain);
     }
 

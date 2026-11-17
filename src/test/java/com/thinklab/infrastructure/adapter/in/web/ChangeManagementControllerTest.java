@@ -97,9 +97,9 @@ class ChangeManagementControllerTest {
     @Test
     @DisplayName("retrieveById returns 200 OK")
     void retrieveById() {
-        when(retrieveChangeRequestUseCase.execute(id)).thenReturn(Mono.just(sampleResponse()));
+        when(retrieveChangeRequestUseCase.execute(id, UUID.fromString(TENANT))).thenReturn(Mono.just(sampleResponse()));
 
-        var response = controller.retrieveById(id).block();
+        var response = controller.retrieveById(id, TENANT).block();
         assertEquals(HttpStatus.OK, response.getStatus());
     }
 
@@ -116,17 +116,17 @@ class ChangeManagementControllerTest {
     @DisplayName("update returns 204 No Content")
     void update() {
         UpdateChangeRequestRequest request = new UpdateChangeRequestRequest("t", "d");
-        when(updateChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(updateChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.update(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.update(id, TENANT, EXECUTOR, request).block().getStatus());
     }
 
     @Test
     @DisplayName("control/submit dispatches ControlChangeRequestUseCase.Action.SUBMIT")
     void controlSubmit() {
-        when(controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR)).thenReturn(Mono.empty());
+        when(controlChangeRequestUseCase.execute(id, UUID.fromString(TENANT), ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.controlSubmit(id, EXECUTOR).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.controlSubmit(id, TENANT, EXECUTOR).block().getStatus());
     }
 
     @Test
@@ -134,17 +134,17 @@ class ChangeManagementControllerTest {
     void assess() {
         AssessChangeRequestRequest request = new AssessChangeRequestRequest(
                 com.thinklab.domain.model.ChangeRequest.RiskLevel.LOW, com.thinklab.domain.model.ChangeRequest.ImpactLevel.LOW);
-        when(assessChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(assessChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.assess(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.assess(id, TENANT, EXECUTOR, request).block().getStatus());
     }
 
     @Test
     @DisplayName("route-for-approval returns 204 No Content")
     void routeForApproval() {
-        when(routeForApprovalUseCase.execute(id, EXECUTOR)).thenReturn(Mono.empty());
+        when(routeForApprovalUseCase.execute(id, UUID.fromString(TENANT), EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.routeForApproval(id, EXECUTOR).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.routeForApproval(id, TENANT, EXECUTOR).block().getStatus());
     }
 
     @Test
@@ -152,9 +152,9 @@ class ChangeManagementControllerTest {
     void captureApprovalDecision() {
         String approver = UUID.randomUUID().toString();
         CaptureApprovalDecisionRequest request = new CaptureApprovalDecisionRequest(DecisionOutcome.APPROVE, "ok");
-        when(captureApprovalDecisionUseCase.execute(eq(id), any(), eq(request), eq(approver))).thenReturn(Mono.just(sampleResponse()));
+        when(captureApprovalDecisionUseCase.execute(eq(id), eq(UUID.fromString(TENANT)), any(), eq(request), eq(approver))).thenReturn(Mono.just(sampleResponse()));
 
-        var response = controller.captureApprovalDecision(id, approver, request).block();
+        var response = controller.captureApprovalDecision(id, TENANT, approver, request).block();
         assertEquals(HttpStatus.OK, response.getStatus());
     }
 
@@ -162,61 +162,61 @@ class ChangeManagementControllerTest {
     @DisplayName("schedule returns 204 No Content")
     void schedule() {
         ScheduleChangeRequestRequest request = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600));
-        when(scheduleChangeRequestUseCase.execute(id, request, EXECUTOR, "ADMIN")).thenReturn(Mono.empty());
+        when(scheduleChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR, "ADMIN")).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.schedule(id, EXECUTOR, "ADMIN", request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.schedule(id, TENANT, EXECUTOR, "ADMIN", request).block().getStatus());
     }
 
     @Test
     @DisplayName("control/start dispatches ControlChangeRequestUseCase.Action.START")
     void controlStart() {
-        when(controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.START, EXECUTOR)).thenReturn(Mono.empty());
+        when(controlChangeRequestUseCase.execute(id, UUID.fromString(TENANT), ControlChangeRequestUseCase.Action.START, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.controlStart(id, EXECUTOR).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.controlStart(id, TENANT, EXECUTOR).block().getStatus());
     }
 
     @Test
     @DisplayName("complete returns 204 No Content")
     void complete() {
         CompleteChangeRequestRequest request = new CompleteChangeRequestRequest("done");
-        when(completeChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(completeChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.complete(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.complete(id, TENANT, EXECUTOR, request).block().getStatus());
     }
 
     @Test
     @DisplayName("rollback returns 204 No Content")
     void rollback() {
         RollbackChangeRequestRequest request = new RollbackChangeRequestRequest("failed");
-        when(rollbackChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(rollbackChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.rollback(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.rollback(id, TENANT, EXECUTOR, request).block().getStatus());
     }
 
     @Test
     @DisplayName("control/close returns 204 No Content")
     void controlClose() {
         CloseChangeRequestRequest request = new CloseChangeRequestRequest("all good");
-        when(closeChangeRequestUseCase.execute(id, request, EXECUTOR)).thenReturn(Mono.empty());
+        when(closeChangeRequestUseCase.execute(id, UUID.fromString(TENANT), request, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.controlClose(id, EXECUTOR, request).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.controlClose(id, TENANT, EXECUTOR, request).block().getStatus());
     }
 
     @Test
     @DisplayName("control/cancel dispatches ControlChangeRequestUseCase.Action.CANCEL")
     void controlCancel() {
-        when(controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).thenReturn(Mono.empty());
+        when(controlChangeRequestUseCase.execute(id, UUID.fromString(TENANT), ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).thenReturn(Mono.empty());
 
-        assertEquals(HttpStatus.NO_CONTENT, controller.controlCancel(id, EXECUTOR).block().getStatus());
+        assertEquals(HttpStatus.NO_CONTENT, controller.controlCancel(id, TENANT, EXECUTOR).block().getStatus());
     }
 
     @Test
     @DisplayName("audit-log/retrieve delegates to RetrieveChangeRequestAuditLogUseCase")
     void retrieveAuditLog() {
         ChangeRequestAuditEntryResponse entry = new ChangeRequestAuditEntryResponse(Instant.now(), "INITIATED", EXECUTOR, null, "DRAFT", "d");
-        when(retrieveChangeRequestAuditLogUseCase.execute(id)).thenReturn(Mono.just(List.of(entry)));
+        when(retrieveChangeRequestAuditLogUseCase.execute(id, UUID.fromString(TENANT))).thenReturn(Mono.just(List.of(entry)));
 
-        var result = controller.retrieveAuditLog(id).block();
+        var result = controller.retrieveAuditLog(id, TENANT).block();
         assertEquals(1, result.size());
     }
 }

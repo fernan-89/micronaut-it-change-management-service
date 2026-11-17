@@ -22,10 +22,10 @@ public class CompleteChangeRequestUseCase {
         this.changeRequestRepository = changeRequestRepository;
     }
 
-    public Mono<Void> execute(UUID id, CompleteChangeRequestRequest request, String executor) {
+    public Mono<Void> execute(UUID id, UUID organisationId, CompleteChangeRequestRequest request, String executor) {
         log.info("[USE CASE] Completing implementation for ChangeRequest ID: {}", id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     var entry = changeRequest.complete(request.implementationNotes(), executor);

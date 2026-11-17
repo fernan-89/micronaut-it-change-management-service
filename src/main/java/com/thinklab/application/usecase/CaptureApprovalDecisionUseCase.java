@@ -36,10 +36,10 @@ public class CaptureApprovalDecisionUseCase {
         this.approvalServicePort = approvalServicePort;
     }
 
-    public Mono<ChangeRequestResponse> execute(UUID id, UUID approverId, CaptureApprovalDecisionRequest request, String executor) {
+    public Mono<ChangeRequestResponse> execute(UUID id, UUID organisationId, UUID approverId, CaptureApprovalDecisionRequest request, String executor) {
         log.info("[USE CASE] Capturing approval decision [{}] from approver [{}] for ChangeRequest ID: {}", request.outcome(), approverId, id);
 
-        return changeRequestRepository.findById(id)
+        return changeRequestRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new ChangeRequestNotFoundException(id)))
                 .flatMap(changeRequest -> {
                     if (changeRequest.getApprovalRequestId() == null) {

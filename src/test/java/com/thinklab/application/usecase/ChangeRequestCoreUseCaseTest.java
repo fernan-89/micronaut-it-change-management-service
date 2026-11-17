@@ -76,20 +76,20 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("retrieveById: not found surfaces ChangeRequestNotFoundException")
     void retrieveByIdNotFound() {
         UUID id = UUID.randomUUID();
-        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
         RetrieveChangeRequestUseCase useCase = new RetrieveChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(id)).expectError(ChangeRequestNotFoundException.class).verify();
+        StepVerifier.create(useCase.execute(id, organisationId)).expectError(ChangeRequestNotFoundException.class).verify();
     }
 
     @Test
     @DisplayName("retrieveById: maps the found ChangeRequest to a response")
     void retrieveByIdFound() {
         ChangeRequest cr = newChangeRequest();
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         RetrieveChangeRequestUseCase useCase = new RetrieveChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(cr.getId())).expectNextCount(1).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId())).expectNextCount(1).verifyComplete();
     }
 
     // --- RetrieveChangeRequestsUseCase ---
@@ -109,10 +109,10 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("update: not found surfaces ChangeRequestNotFoundException")
     void updateNotFound() {
         UUID id = UUID.randomUUID();
-        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
         UpdateChangeRequestUseCase useCase = new UpdateChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(id, new UpdateChangeRequestRequest("t", "d"), EXECUTOR))
+        StepVerifier.create(useCase.execute(id, organisationId, new UpdateChangeRequestRequest("t", "d"), EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
     }
@@ -121,11 +121,11 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("update: applies the domain mutation and persists the granular update")
     void updateSuccess() {
         ChangeRequest cr = newChangeRequest();
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateBasicInfo(eq(cr.getId()), eq("New title"), eq("New desc"), any())).thenReturn(Mono.empty());
         UpdateChangeRequestUseCase useCase = new UpdateChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(cr.getId(), new UpdateChangeRequestRequest("New title", "New desc"), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new UpdateChangeRequestRequest("New title", "New desc"), EXECUTOR)).verifyComplete();
     }
 
     // --- ControlChangeRequestUseCase ---
@@ -134,10 +134,10 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("control: not found surfaces ChangeRequestNotFoundException")
     void controlNotFound() {
         UUID id = UUID.randomUUID();
-        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
         ControlChangeRequestUseCase useCase = new ControlChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(id, ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR))
+        StepVerifier.create(useCase.execute(id, organisationId, ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
     }
@@ -146,15 +146,15 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("control: SUBMIT, START and CANCEL each dispatch their domain transition")
     void controlActions() {
         ChangeRequest submittable = newChangeRequest();
-        when(changeRequestRepository.findById(submittable.getId())).thenReturn(Mono.just(submittable));
+        when(changeRequestRepository.findById(submittable.getId(), submittable.getOrganisationId())).thenReturn(Mono.just(submittable));
         when(changeRequestRepository.updateStatus(eq(submittable.getId()), eq(ChangeStatus.SUBMITTED), any())).thenReturn(Mono.empty());
         ControlChangeRequestUseCase useCase = new ControlChangeRequestUseCase(changeRequestRepository);
-        StepVerifier.create(useCase.execute(submittable.getId(), ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(submittable.getId(), submittable.getOrganisationId(), ControlChangeRequestUseCase.Action.SUBMIT, EXECUTOR)).verifyComplete();
 
         ChangeRequest cancellable = newChangeRequest();
-        when(changeRequestRepository.findById(cancellable.getId())).thenReturn(Mono.just(cancellable));
+        when(changeRequestRepository.findById(cancellable.getId(), cancellable.getOrganisationId())).thenReturn(Mono.just(cancellable));
         when(changeRequestRepository.updateStatus(eq(cancellable.getId()), eq(ChangeStatus.CANCELLED), any())).thenReturn(Mono.empty());
-        StepVerifier.create(useCase.execute(cancellable.getId(), ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cancellable.getId(), cancellable.getOrganisationId(), ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).verifyComplete();
 
         ChangeRequest scheduled = ChangeRequest.createNew(UUID.randomUUID(), organisationId, requesterId, "t", "d",
                 ChangeType.STANDARD, Set.of(UUID.randomUUID()), null, EXECUTOR);
@@ -162,9 +162,9 @@ class ChangeRequestCoreUseCaseTest {
         scheduled.assess(RiskLevel.LOW, ImpactLevel.LOW, EXECUTOR);
         scheduled.preApprove(EXECUTOR);
         scheduled.schedule(UUID.randomUUID(), java.time.Instant.now(), java.time.Instant.now().plusSeconds(3600), EXECUTOR);
-        when(changeRequestRepository.findById(scheduled.getId())).thenReturn(Mono.just(scheduled));
+        when(changeRequestRepository.findById(scheduled.getId(), scheduled.getOrganisationId())).thenReturn(Mono.just(scheduled));
         when(changeRequestRepository.updateStatus(eq(scheduled.getId()), eq(ChangeStatus.IN_PROGRESS), any())).thenReturn(Mono.empty());
-        StepVerifier.create(useCase.execute(scheduled.getId(), ControlChangeRequestUseCase.Action.START, EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(scheduled.getId(), scheduled.getOrganisationId(), ControlChangeRequestUseCase.Action.START, EXECUTOR)).verifyComplete();
     }
 
     // --- AssessChangeRequestUseCase ---
@@ -173,10 +173,10 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("assess: not found surfaces ChangeRequestNotFoundException")
     void assessNotFound() {
         UUID id = UUID.randomUUID();
-        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
         AssessChangeRequestUseCase useCase = new AssessChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(id, new AssessChangeRequestRequest(RiskLevel.LOW, ImpactLevel.LOW), EXECUTOR))
+        StepVerifier.create(useCase.execute(id, organisationId, new AssessChangeRequestRequest(RiskLevel.LOW, ImpactLevel.LOW), EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
     }
@@ -186,12 +186,12 @@ class ChangeRequestCoreUseCaseTest {
     void assessSuccess() {
         ChangeRequest cr = newChangeRequest();
         cr.submit(EXECUTOR);
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateAssessment(eq(cr.getId()), eq(RiskLevel.HIGH), eq(ImpactLevel.MEDIUM), eq(ChangeStatus.ASSESSED), any()))
                 .thenReturn(Mono.empty());
         AssessChangeRequestUseCase useCase = new AssessChangeRequestUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(cr.getId(), new AssessChangeRequestRequest(RiskLevel.HIGH, ImpactLevel.MEDIUM), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new AssessChangeRequestRequest(RiskLevel.HIGH, ImpactLevel.MEDIUM), EXECUTOR)).verifyComplete();
     }
 
     // --- CompleteChangeRequestUseCase / RollbackChangeRequestUseCase / CloseChangeRequestUseCase ---
@@ -211,49 +211,49 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("complete: not found surfaces ChangeRequestNotFoundException; success persists the notes")
     void complete() {
         UUID missing = UUID.randomUUID();
-        when(changeRequestRepository.findById(missing)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(missing, organisationId)).thenReturn(Mono.empty());
         CompleteChangeRequestUseCase useCase = new CompleteChangeRequestUseCase(changeRequestRepository);
-        StepVerifier.create(useCase.execute(missing, new CompleteChangeRequestRequest("done"), EXECUTOR))
+        StepVerifier.create(useCase.execute(missing, organisationId, new CompleteChangeRequestRequest("done"), EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
 
         ChangeRequest cr = inProgressChangeRequest();
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateCompletion(eq(cr.getId()), eq("done"), eq(ChangeStatus.IMPLEMENTED), any())).thenReturn(Mono.empty());
-        StepVerifier.create(useCase.execute(cr.getId(), new CompleteChangeRequestRequest("done"), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new CompleteChangeRequestRequest("done"), EXECUTOR)).verifyComplete();
     }
 
     @Test
     @DisplayName("rollback: not found surfaces ChangeRequestNotFoundException; success persists the reason")
     void rollback() {
         UUID missing = UUID.randomUUID();
-        when(changeRequestRepository.findById(missing)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(missing, organisationId)).thenReturn(Mono.empty());
         RollbackChangeRequestUseCase useCase = new RollbackChangeRequestUseCase(changeRequestRepository);
-        StepVerifier.create(useCase.execute(missing, new RollbackChangeRequestRequest("failed"), EXECUTOR))
+        StepVerifier.create(useCase.execute(missing, organisationId, new RollbackChangeRequestRequest("failed"), EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
 
         ChangeRequest cr = inProgressChangeRequest();
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateRollback(eq(cr.getId()), eq("failed"), eq(ChangeStatus.ROLLED_BACK), any())).thenReturn(Mono.empty());
-        StepVerifier.create(useCase.execute(cr.getId(), new RollbackChangeRequestRequest("failed"), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new RollbackChangeRequestRequest("failed"), EXECUTOR)).verifyComplete();
     }
 
     @Test
     @DisplayName("close: not found surfaces ChangeRequestNotFoundException; success persists the notes")
     void close() {
         UUID missing = UUID.randomUUID();
-        when(changeRequestRepository.findById(missing)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(missing, organisationId)).thenReturn(Mono.empty());
         CloseChangeRequestUseCase useCase = new CloseChangeRequestUseCase(changeRequestRepository);
-        StepVerifier.create(useCase.execute(missing, new CloseChangeRequestRequest("all good"), EXECUTOR))
+        StepVerifier.create(useCase.execute(missing, organisationId, new CloseChangeRequestRequest("all good"), EXECUTOR))
                 .expectError(ChangeRequestNotFoundException.class)
                 .verify();
 
         ChangeRequest cr = inProgressChangeRequest();
         cr.complete("done", EXECUTOR);
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateClose(eq(cr.getId()), eq("all good"), eq(ChangeStatus.CLOSED), any())).thenReturn(Mono.empty());
-        StepVerifier.create(useCase.execute(cr.getId(), new CloseChangeRequestRequest("all good"), EXECUTOR)).verifyComplete();
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new CloseChangeRequestRequest("all good"), EXECUTOR)).verifyComplete();
     }
 
     // --- RetrieveChangeRequestAuditLogUseCase ---
@@ -262,21 +262,36 @@ class ChangeRequestCoreUseCaseTest {
     @DisplayName("auditLog: not found surfaces ChangeRequestNotFoundException")
     void auditLogNotFound() {
         UUID id = UUID.randomUUID();
-        when(changeRequestRepository.findById(id)).thenReturn(Mono.empty());
+        when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
         RetrieveChangeRequestAuditLogUseCase useCase = new RetrieveChangeRequestAuditLogUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(id)).expectError(ChangeRequestNotFoundException.class).verify();
+        StepVerifier.create(useCase.execute(id, organisationId)).expectError(ChangeRequestNotFoundException.class).verify();
     }
 
     @Test
     @DisplayName("auditLog: collects the ledger into a Mono<List<...>>")
     void auditLogSuccess() {
         ChangeRequest cr = newChangeRequest();
-        when(changeRequestRepository.findById(cr.getId())).thenReturn(Mono.just(cr));
+        when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         RetrieveChangeRequestAuditLogUseCase useCase = new RetrieveChangeRequestAuditLogUseCase(changeRequestRepository);
 
-        StepVerifier.create(useCase.execute(cr.getId()))
+        StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId()))
                 .assertNext(entries -> assertEquals(1, entries.size()))
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("every by-id lookup is made in the caller's tenant: another tenant's change request is the same as none, and nothing is written")
+    void anotherTenantsChangeRequest() {
+        UUID id = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        when(changeRequestRepository.findById(id, other)).thenReturn(Mono.empty());
+
+        StepVerifier.create(new RetrieveChangeRequestUseCase(changeRequestRepository).execute(id, other)).expectError(ChangeRequestNotFoundException.class).verify();
+        StepVerifier.create(new RetrieveChangeRequestAuditLogUseCase(changeRequestRepository).execute(id, other)).expectError(ChangeRequestNotFoundException.class).verify();
+        StepVerifier.create(new ControlChangeRequestUseCase(changeRequestRepository).execute(id, other, ControlChangeRequestUseCase.Action.CANCEL, EXECUTOR)).expectError(ChangeRequestNotFoundException.class).verify();
+
+        org.mockito.Mockito.verify(changeRequestRepository, org.mockito.Mockito.never()).findById(id, organisationId);
+        org.mockito.Mockito.verifyNoMoreInteractions(changeRequestRepository);
     }
 }

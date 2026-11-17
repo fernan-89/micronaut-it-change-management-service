@@ -121,8 +121,8 @@ public class ChangeManagementController {
 
     /** Behavior Qualifier: {@code retrieve}. */
     @Get("/{id}/retrieve")
-    public Mono<HttpResponse<ChangeRequestResponse>> retrieveById(@PathVariable UUID id) {
-        return retrieveChangeRequestUseCase.execute(id).map(HttpResponse::ok);
+    public Mono<HttpResponse<ChangeRequestResponse>> retrieveById(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId) {
+        return retrieveChangeRequestUseCase.execute(id, UUID.fromString(tenantId)).map(HttpResponse::ok);
     }
 
     /** Behavior Qualifier: {@code retrieve} (collection). Filterable by {@code status}. */
@@ -136,89 +136,89 @@ public class ChangeManagementController {
     /** Behavior Qualifier: {@code update}. */
     @Put("/{id}/update")
     public Mono<HttpResponse<Void>> update(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid UpdateChangeRequestRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid UpdateChangeRequestRequest request
     ) {
-        return updateChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return updateChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/submit}. DRAFT -&gt; SUBMITTED. */
     @Put("/{id}/control/submit")
-    public Mono<HttpResponse<Void>> controlSubmit(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
-        return controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.SUBMIT, executor).thenReturn(HttpResponse.noContent());
+    public Mono<HttpResponse<Void>> controlSubmit(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+        return controlChangeRequestUseCase.execute(id, UUID.fromString(tenantId), ControlChangeRequestUseCase.Action.SUBMIT, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code assess}. SUBMITTED -&gt; ASSESSED. */
     @Put("/{id}/assess")
     public Mono<HttpResponse<Void>> assess(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid AssessChangeRequestRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid AssessChangeRequestRequest request
     ) {
-        return assessChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return assessChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code route-for-approval}. ASSESSED -&gt; APPROVED (STANDARD) or CAB_REVIEW/ECAB_REVIEW. */
     @Put("/{id}/route-for-approval")
-    public Mono<HttpResponse<Void>> routeForApproval(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
-        return routeForApprovalUseCase.execute(id, executor).thenReturn(HttpResponse.noContent());
+    public Mono<HttpResponse<Void>> routeForApproval(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+        return routeForApprovalUseCase.execute(id, UUID.fromString(tenantId), executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code approval/capture}. Forwards one approver's decision synchronously. */
     @Put("/{id}/approval/capture")
     public Mono<HttpResponse<ChangeRequestResponse>> captureApprovalDecision(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CaptureApprovalDecisionRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CaptureApprovalDecisionRequest request
     ) {
         log.info("[ACTION: CAPTURE_APPROVAL_DECISION] [APPROVER: {}] decision for ChangeRequest ID: {}", executor, id);
 
-        return captureApprovalDecisionUseCase.execute(id, UUID.fromString(executor), request, executor).map(HttpResponse::ok);
+        return captureApprovalDecisionUseCase.execute(id, UUID.fromString(tenantId), UUID.fromString(executor), request, executor).map(HttpResponse::ok);
     }
 
     /** Behavior Qualifier: {@code schedule}. APPROVED -&gt; SCHEDULED. */
     @Put("/{id}/schedule")
     public Mono<HttpResponse<Void>> schedule(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Header(ROLE_HEADER) @Nullable String role,
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Header(ROLE_HEADER) @Nullable String role,
             @Body @Valid ScheduleChangeRequestRequest request
     ) {
-        return scheduleChangeRequestUseCase.execute(id, request, executor, role).thenReturn(HttpResponse.noContent());
+        return scheduleChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor, role).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/start}. SCHEDULED -&gt; IN_PROGRESS. */
     @Put("/{id}/control/start")
-    public Mono<HttpResponse<Void>> controlStart(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
-        return controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.START, executor).thenReturn(HttpResponse.noContent());
+    public Mono<HttpResponse<Void>> controlStart(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+        return controlChangeRequestUseCase.execute(id, UUID.fromString(tenantId), ControlChangeRequestUseCase.Action.START, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code complete}. IN_PROGRESS -&gt; IMPLEMENTED. */
     @Put("/{id}/complete")
     public Mono<HttpResponse<Void>> complete(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CompleteChangeRequestRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CompleteChangeRequestRequest request
     ) {
-        return completeChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return completeChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code rollback}. IN_PROGRESS -&gt; ROLLED_BACK (terminal). */
     @Put("/{id}/rollback")
     public Mono<HttpResponse<Void>> rollback(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid RollbackChangeRequestRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid RollbackChangeRequestRequest request
     ) {
-        return rollbackChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return rollbackChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/close}. IMPLEMENTED -&gt; CLOSED (terminal). */
     @Put("/{id}/control/close")
     public Mono<HttpResponse<Void>> controlClose(
-            @PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CloseChangeRequestRequest request
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor, @Body @Valid CloseChangeRequestRequest request
     ) {
-        return closeChangeRequestUseCase.execute(id, request, executor).thenReturn(HttpResponse.noContent());
+        return closeChangeRequestUseCase.execute(id, UUID.fromString(tenantId), request, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/cancel}. Terminal, replaces DELETE. */
     @Put("/{id}/control/cancel")
-    public Mono<HttpResponse<Void>> controlCancel(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
-        return controlChangeRequestUseCase.execute(id, ControlChangeRequestUseCase.Action.CANCEL, executor).thenReturn(HttpResponse.noContent());
+    public Mono<HttpResponse<Void>> controlCancel(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+        return controlChangeRequestUseCase.execute(id, UUID.fromString(tenantId), ControlChangeRequestUseCase.Action.CANCEL, executor).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code audit-log/retrieve}. Immutable forensic ledger of the ChangeRequest. */
     @Get("/{id}/audit-log/retrieve")
-    public Mono<List<ChangeRequestAuditEntryResponse>> retrieveAuditLog(@PathVariable UUID id) {
-        return retrieveChangeRequestAuditLogUseCase.execute(id);
+    public Mono<List<ChangeRequestAuditEntryResponse>> retrieveAuditLog(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId) {
+        return retrieveChangeRequestAuditLogUseCase.execute(id, UUID.fromString(tenantId));
     }
 }
