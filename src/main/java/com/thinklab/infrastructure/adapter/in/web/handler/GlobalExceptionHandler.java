@@ -105,6 +105,7 @@ public class GlobalExceptionHandler implements ExceptionHandler<Throwable, HttpR
         HttpStatus status = switch (ex.getErrorCode()) {
             case "ERR-CHG-00404" -> HttpStatus.NOT_FOUND;
             case "ERR-CHG-00403" -> HttpStatus.FORBIDDEN;
+            case "ERR-CHG-00422" -> HttpStatus.UNPROCESSABLE_ENTITY;
             default -> HttpStatus.CONFLICT;
         };
 

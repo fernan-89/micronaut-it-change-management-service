@@ -68,6 +68,11 @@ class ChangeRequestIntegrationUseCaseTest {
         return cr;
     }
 
+    /** The environment pair of ADR-031 (per-tenant switch off): what these tests were written against. */
+    private ApprovalPolicies policies(String cab, String ecab) {
+        return new ApprovalPolicies(org.mockito.Mockito.mock(com.thinklab.domain.repository.ApprovalSettingsRepository.class), false, cab, ecab);
+    }
+
     // --- RouteForApprovalUseCase ---
 
     @Test
@@ -75,7 +80,7 @@ class ChangeRequestIntegrationUseCaseTest {
     void routeForApprovalNotFound() {
         UUID id = UUID.randomUUID();
         when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(id, organisationId, EXECUTOR)).expectError(ChangeRequestNotFoundException.class).verify();
     }
@@ -86,7 +91,7 @@ class ChangeRequestIntegrationUseCaseTest {
         ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.updateStatus(eq(cr.getId()), eq(ChangeStatus.APPROVED), any())).thenReturn(Mono.empty());
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), EXECUTOR)).verifyComplete();
 
@@ -102,7 +107,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(approvalServicePort.initiateApprovalRequest(organisationId, cr.getId(), requesterId, UUID.fromString(CAB_POLICY), EXECUTOR))
                 .thenReturn(Mono.just(approvalRequestId));
         when(changeRequestRepository.updateRouting(eq(cr.getId()), eq(approvalRequestId), eq(ChangeStatus.CAB_REVIEW), any())).thenReturn(Mono.empty());
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), EXECUTOR)).verifyComplete();
     }
@@ -116,7 +121,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(approvalServicePort.initiateApprovalRequest(organisationId, cr.getId(), requesterId, UUID.fromString(ECAB_POLICY), EXECUTOR))
                 .thenReturn(Mono.just(approvalRequestId));
         when(changeRequestRepository.updateRouting(eq(cr.getId()), eq(approvalRequestId), eq(ChangeStatus.ECAB_REVIEW), any())).thenReturn(Mono.empty());
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), EXECUTOR)).verifyComplete();
     }
@@ -126,7 +131,7 @@ class ChangeRequestIntegrationUseCaseTest {
     void routeForApprovalMissingPolicyConfig() {
         ChangeRequest blank = assessedChangeRequest(ChangeType.NORMAL);
         when(changeRequestRepository.findById(blank.getId(), blank.getOrganisationId())).thenReturn(Mono.just(blank));
-        RouteForApprovalUseCase blankConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, "", "");
+        RouteForApprovalUseCase blankConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies("", ""));
 
         StepVerifier.create(blankConfigured.execute(blank.getId(), blank.getOrganisationId(), EXECUTOR))
                 .expectError(IllegalStateException.class)
@@ -134,7 +139,7 @@ class ChangeRequestIntegrationUseCaseTest {
 
         ChangeRequest nullConfig = assessedChangeRequest(ChangeType.EMERGENCY);
         when(changeRequestRepository.findById(nullConfig.getId(), nullConfig.getOrganisationId())).thenReturn(Mono.just(nullConfig));
-        RouteForApprovalUseCase nullConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, null, null);
+        RouteForApprovalUseCase nullConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(null, null));
 
         StepVerifier.create(nullConfigured.execute(nullConfig.getId(), nullConfig.getOrganisationId(), EXECUTOR))
                 .expectError(IllegalStateException.class)
@@ -148,7 +153,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.acquireRemoteStepLease(cr.getId(), ChangeStatus.ASSESSED))
                 .thenReturn(Mono.error(new InvalidChangeRequestStatusException("another request is already working on this change")));
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), EXECUTOR)).expectError(InvalidChangeRequestStatusException.class).verify();
 
@@ -163,7 +168,7 @@ class ChangeRequestIntegrationUseCaseTest {
         ChangeRequest cr = assessedChangeRequest(ChangeType.NORMAL);
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(approvalServicePort.initiateApprovalRequest(any(), any(), any(), any(), any())).thenReturn(Mono.error(new IllegalStateException("approval service down")));
-        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, CAB_POLICY, ECAB_POLICY);
+        RouteForApprovalUseCase useCase = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), EXECUTOR)).expectError(IllegalStateException.class).verify();
 
@@ -259,7 +264,7 @@ class ChangeRequestIntegrationUseCaseTest {
     void scheduleNotFound() {
         UUID id = UUID.randomUUID();
         when(changeRequestRepository.findById(id, organisationId)).thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(id, organisationId, new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600)), EXECUTOR, null))
                 .expectError(ChangeRequestNotFoundException.class)
@@ -285,7 +290,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
                 .thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), EXECUTOR, "ADMIN")).verifyComplete();
     }
@@ -296,7 +301,7 @@ class ChangeRequestIntegrationUseCaseTest {
         ChangeRequest cr = assessedChangeRequest(ChangeType.STANDARD);
         cr.preApprove(EXECUTOR);
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(cr.getId(), cr.getOrganisationId(),
                 new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage"), EXECUTOR, null).block());
@@ -307,10 +312,10 @@ class ChangeRequestIntegrationUseCaseTest {
     @Test
     @DisplayName("schedule: a freeze override from a role below ADMIN is refused (403) before the change is even loaded; ADMIN and SERVICE may")
     void scheduleOverrideNeedsAnElevatedRole() {
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
         ScheduleChangeRequestRequest override = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage");
 
-        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
+        when(approvalServicePort.approversOfPolicy(organisationId, UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
         for (String role : new String[]{"OPERATOR", "REQUESTER", "VIEWER"}) {
             StepVerifier.create(useCase.execute(UUID.randomUUID(), organisationId, override, EXECUTOR, role)).expectError(FreezeOverrideNotPermittedException.class).verify();
         }
@@ -332,12 +337,12 @@ class ChangeRequestIntegrationUseCaseTest {
         Instant end = start.plusSeconds(3600);
         UUID windowId = UUID.randomUUID();
         UUID member = UUID.randomUUID();
-        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID(), member)));
+        when(approvalServicePort.approversOfPolicy(organisationId, UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID(), member)));
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(operationWindowServicePort.reserveImplementationWindow(organisationId, cr.getTitle(), cr.getTargetAssetIds(), start, end, member.toString(), "P1 outage"))
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any())).thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, end, "P1 outage"), member.toString(), "OPERATOR")).verifyComplete();
     }
@@ -346,16 +351,16 @@ class ChangeRequestIntegrationUseCaseTest {
     @DisplayName("schedule: someone who is not on the ECAB is refused, and so is everyone when the ECAB cannot be read or is not configured (fail-closed)")
     void scheduleOverrideRefusedWhenNotOnTheEcab() {
         ScheduleChangeRequestRequest override = new ScheduleChangeRequestRequest(Instant.now(), Instant.now().plusSeconds(3600), "P1 outage");
-        ScheduleChangeRequestUseCase configured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase configured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
-        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
+        when(approvalServicePort.approversOfPolicy(organisationId, UUID.fromString(ECAB_POLICY))).thenReturn(Mono.just(Set.of(UUID.randomUUID())));
         StepVerifier.create(configured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
 
-        when(approvalServicePort.approversOfPolicy(UUID.fromString(ECAB_POLICY))).thenReturn(Mono.error(new IllegalStateException("down")));
+        when(approvalServicePort.approversOfPolicy(organisationId, UUID.fromString(ECAB_POLICY))).thenReturn(Mono.error(new IllegalStateException("down")));
         StepVerifier.create(configured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
 
         for (String blank : new String[]{null, " "}) {
-            ScheduleChangeRequestUseCase unconfigured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, blank);
+            ScheduleChangeRequestUseCase unconfigured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, blank));
             StepVerifier.create(unconfigured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
         }
         verifyNoInteractions(changeRequestRepository, operationWindowServicePort);
@@ -374,7 +379,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any())).thenReturn(Mono.empty());
 
-        StepVerifier.create(new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY)
+        StepVerifier.create(new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY))
                 .execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, "VIEWER")).verifyComplete();
     }
 
@@ -391,7 +396,7 @@ class ChangeRequestIntegrationUseCaseTest {
                 .thenReturn(Mono.just(windowId));
         when(changeRequestRepository.updateScheduling(eq(cr.getId()), eq(windowId), eq(start), eq(end), eq(ChangeStatus.SCHEDULED), any()))
                 .thenReturn(Mono.empty());
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, end), EXECUTOR, null)).verifyComplete();
     }
@@ -405,7 +410,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(changeRequestRepository.acquireRemoteStepLease(cr.getId(), ChangeStatus.APPROVED))
                 .thenReturn(Mono.error(new InvalidChangeRequestStatusException("another request is already working on this change")));
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, start.plusSeconds(3600)), EXECUTOR, null))
                 .expectError(InvalidChangeRequestStatusException.class).verify();
@@ -423,7 +428,7 @@ class ChangeRequestIntegrationUseCaseTest {
         when(changeRequestRepository.findById(cr.getId(), cr.getOrganisationId())).thenReturn(Mono.just(cr));
         when(operationWindowServicePort.reserveImplementationWindow(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Mono.error(new IllegalStateException("window service down")));
-        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, ECAB_POLICY);
+        ScheduleChangeRequestUseCase useCase = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, ECAB_POLICY));
 
         StepVerifier.create(useCase.execute(cr.getId(), cr.getOrganisationId(), new ScheduleChangeRequestRequest(start, start.plusSeconds(3600)), EXECUTOR, null))
                 .expectError(IllegalStateException.class).verify();

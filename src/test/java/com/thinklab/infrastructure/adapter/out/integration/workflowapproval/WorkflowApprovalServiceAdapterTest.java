@@ -50,6 +50,7 @@ class WorkflowApprovalServiceAdapterTest {
         UUID organisationId = UUID.randomUUID();
         UUID changeRequestId = UUID.randomUUID();
         UUID requesterId = UUID.randomUUID();
+        UUID tenant = UUID.randomUUID();
         UUID policyId = UUID.randomUUID();
         UUID approvalRequestId = UUID.randomUUID();
         when(apiClient.initiate(any(), any(), any())).thenReturn(Mono.just(new ApprovalRequestApiResponse(approvalRequestId, "PENDING")));
@@ -128,32 +129,50 @@ class WorkflowApprovalServiceAdapterTest {
     @Test
     @DisplayName("approversOfPolicy returns everyone who is an approver of any stage, and tolerates a policy without stages or without the flat list")
     void approversOfPolicy() {
+        UUID tenant = UUID.randomUUID();
         UUID policyId = UUID.randomUUID();
         UUID lead = UUID.randomUUID();
         UUID security = UUID.randomUUID();
         UUID director = UUID.randomUUID();
-        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(
+        when(apiClient.retrievePolicy(policyId, tenant.toString())).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(
                 List.of(lead), List.of(new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(lead)),
                         new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(security, director))))));
 
-        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(lead, security, director)).verifyComplete();
+        StepVerifier.create(adapter.approversOfPolicy(tenant, policyId)).expectNext(Set.of(lead, security, director)).verifyComplete();
 
         // an older workflow-approval answers only the flat list; a newer one could omit it
-        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(List.of(lead), null)));
-        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(lead)).verifyComplete();
-        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(null,
+        when(apiClient.retrievePolicy(policyId, tenant.toString())).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(List.of(lead), null)));
+        StepVerifier.create(adapter.approversOfPolicy(tenant, policyId)).expectNext(Set.of(lead)).verifyComplete();
+        when(apiClient.retrievePolicy(policyId, tenant.toString())).thenReturn(Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(null,
                 List.of(new WorkflowApprovalServiceAdapter.PolicyStageApiResponse(List.of(security))))));
-        StepVerifier.create(adapter.approversOfPolicy(policyId)).expectNext(Set.of(security)).verifyComplete();
+        StepVerifier.create(adapter.approversOfPolicy(tenant, policyId)).expectNext(Set.of(security)).verifyComplete();
     }
 
     @Test
     @DisplayName("approversOfPolicy hides infrastructure failures behind a dependency-failure error")
     void approversOfPolicyFailure() {
+        UUID tenant = UUID.randomUUID();
         UUID policyId = UUID.randomUUID();
-        when(apiClient.retrievePolicy(policyId)).thenReturn(Mono.error(new RuntimeException("boom")));
+        when(apiClient.retrievePolicy(policyId, tenant.toString())).thenReturn(Mono.error(new RuntimeException("boom")));
 
-        StepVerifier.create(adapter.approversOfPolicy(policyId))
+        StepVerifier.create(adapter.approversOfPolicy(tenant, policyId))
                 .expectErrorSatisfies(error -> assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable")))
                 .verify();
+    }
+
+    @Test
+    @DisplayName("policyExists is true for a policy the approval service returns in the tenant, false for a 404, and a service that is down or refuses is a dependency failure, never a false")
+    void policyExists() {
+        UUID tenant = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+        var notFound = new HttpClientResponseException("Not Found", HttpResponse.status(HttpStatus.NOT_FOUND));
+        var badRequest = new HttpClientResponseException("Bad Request", HttpResponse.status(HttpStatus.BAD_REQUEST));
+        when(apiClient.retrievePolicy(policyId, tenant.toString())).thenReturn(
+                Mono.just(new WorkflowApprovalServiceAdapter.PolicyApiResponse(List.of(), List.of())), Mono.error(notFound), Mono.error(badRequest), Mono.error(new IllegalStateException("down")));
+
+        StepVerifier.create(adapter.policyExists(tenant, policyId)).expectNext(true).verifyComplete();
+        StepVerifier.create(adapter.policyExists(tenant, policyId)).expectNext(false).verifyComplete();
+        StepVerifier.create(adapter.policyExists(tenant, policyId)).expectErrorSatisfies(error -> assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable"))).verify();
+        StepVerifier.create(adapter.policyExists(tenant, policyId)).expectErrorSatisfies(error -> assertTrue(error.getMessage().contains("Workflow Approval Service is currently unavailable"))).verify();
     }
 }
