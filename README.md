@@ -97,7 +97,8 @@ verbatim to workflow-approval-service - not an operator identity (ADR-032). Ther
 | error_code | HTTP | Meaning |
 |---|---|---|
 | `ERR-CHG-00404` | 404 | ChangeRequest not found |
-| `ERR-CHG-00403` | 403 | A freeze override was requested by someone who is neither ADMIN/SERVICE nor on the ECAB (ADR-035/036); the change can still be scheduled without it |
+| `ERR-CHG-00403` | 403 | Also: setting the approval policies below ADMIN/SERVICE (ADR-039). A freeze override was requested by someone who is neither ADMIN/SERVICE nor on the ECAB (ADR-035/036); the change can still be scheduled without it |
+| `ERR-CHG-00422` | 422 | The organisation has no CAB/ECAB policy configured (per-tenant mode, ADR-039): set it with `PUT /approval-settings/update` |
 | `ERR-CHG-00409` | 409 | Illegal lifecycle transition, missing approval-in-progress, a scheduling collision surfaced by operation-window-service (ADR-019/ADR-033), or a simultaneous request that lost the race for the same change (guarded writes and the remote-step lease, ADR-037) |
 | `ERR-VALIDATION-00400` | 400 | Payload/header/identifier validation failure |
 | `ERR-INTERNAL-00500` | 500 | Unexpected technical failure |
@@ -140,6 +141,7 @@ docker build -t thinklab-it-change-management-service:latest .
 | `OPERATION_WINDOW_SERVICE_URL` | `http://localhost:8084` | operation-window-service base URL |
 | `THINKLAB_CAB_POLICY_ID` | *(none)* | ApprovalPolicy id on workflow-approval-service for `NORMAL` changes |
 | `THINKLAB_ECAB_POLICY_ID` | *(none)* | ApprovalPolicy id on workflow-approval-service for `EMERGENCY` changes |
+| `THINKLAB_CHANGE_APPROVAL_POLICY_PER_TENANT` | `false` | ADR-039: `false` keeps the two ids above shared by every tenant; `true` makes each tenant use its own CAB and ECAB, set with `PUT /approval-settings/update` (a tenant without them gets a 422 when routing a change) and the two ids above are ignored |
 
 ## Architecture Decision Records
 

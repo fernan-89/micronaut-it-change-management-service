@@ -192,5 +192,7 @@ thinklab:
   # template, ADR-031 of this service). These are operator-provisioned UUIDs, not defaultable.
   # ----------------------------------------------------------------------------------------------
   change-management:
+    # ADR-039: off, the environment pair below is shared by every tenant; on, only the tenant's own approval-settings count (a tenant without them is refused).
+    approval-policy-per-tenant: ${THINKLAB_CHANGE_APPROVAL_POLICY_PER_TENANT:false}
     cab-policy-id: ${THINKLAB_CAB_POLICY_ID:}
     ecab-policy-id: ${THINKLAB_ECAB_POLICY_ID:}

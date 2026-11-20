@@ -4,7 +4,6 @@ import com.thinklab.domain.exception.ChangeRequestNotFoundException;
 import com.thinklab.domain.model.ChangeRequest.ChangeType;
 import com.thinklab.domain.port.ApprovalServicePort;
 import com.thinklab.domain.repository.ChangeRequestRepository;
-import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,23 +24,16 @@ public class RouteForApprovalUseCase {
 
     private final ChangeRequestRepository changeRequestRepository;
     private final ApprovalServicePort approvalServicePort;
-    private final UUID cabPolicyId;
-    private final UUID ecabPolicyId;
+    private final ApprovalPolicies approvalPolicies;
 
     public RouteForApprovalUseCase(
             ChangeRequestRepository changeRequestRepository,
             ApprovalServicePort approvalServicePort,
-            @Value("${thinklab.change-management.cab-policy-id}") String cabPolicyId,
-            @Value("${thinklab.change-management.ecab-policy-id}") String ecabPolicyId
+            ApprovalPolicies approvalPolicies
     ) {
         this.changeRequestRepository = changeRequestRepository;
         this.approvalServicePort = approvalServicePort;
-        this.cabPolicyId = parsePolicyId(cabPolicyId);
-        this.ecabPolicyId = parsePolicyId(ecabPolicyId);
-    }
-
-    private static UUID parsePolicyId(String value) {
-        return (value == null || value.isBlank()) ? null : UUID.fromString(value);
+        this.approvalPolicies = approvalPolicies;
     }
 
     public Mono<Void> execute(UUID id, UUID organisationId, String executor) {
@@ -55,21 +47,17 @@ public class RouteForApprovalUseCase {
                         return changeRequestRepository.updateStatus(id, changeRequest.getStatus(), entry);
                     }
 
-                    UUID policyId = changeRequest.getChangeType() == ChangeType.EMERGENCY ? ecabPolicyId : cabPolicyId;
-                    if (policyId == null) {
-                        return Mono.error(new IllegalStateException(
-                                "Dependency Failure: no ApprovalPolicy configured for change type " + changeRequest.getChangeType()));
-                    }
-
-                    // The lease first: only one of simultaneous requests may file an approval request; the others are refused (409) before filing any.
-                    return changeRequestRepository.acquireRemoteStepLease(id, changeRequest.getStatus())
+                    // The tenant's own policy (ADR-039); a tenant without one is refused before anything is leased or filed.
+                    return approvalPolicies.decidingPolicy(changeRequest.getOrganisationId(), changeRequest.getChangeType()).flatMap(policyId ->
+                            // The lease first: only one of simultaneous requests may file an approval request; the others are refused (409) before filing any.
+                            changeRequestRepository.acquireRemoteStepLease(id, changeRequest.getStatus())
                             .then(Mono.defer(() -> approvalServicePort.initiateApprovalRequest(
                                             changeRequest.getOrganisationId(), id, changeRequest.getRequesterId(), policyId, executor)
                                     .flatMap(approvalRequestId -> {
                                         var entry = changeRequest.routeForApproval(approvalRequestId, executor);
                                         return changeRequestRepository.updateRouting(id, approvalRequestId, changeRequest.getStatus(), entry);
                                     })
-                                    .onErrorResume(failure -> changeRequestRepository.releaseRemoteStepLease(id).then(Mono.error(failure)))));
+                                    .onErrorResume(failure -> changeRequestRepository.releaseRemoteStepLease(id).then(Mono.error(failure))))));
                 });
     }
 }

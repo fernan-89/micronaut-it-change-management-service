@@ -64,6 +64,17 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("ApprovalPolicyNotConfiguredException maps to 422 with ERR-CHG-00422 and says what to configure; ApprovalSettingsNotPermittedException maps to 403")
+    void approvalSettings() {
+        Map<String, Object> body = assertProblem(exceptionHandler.handle(request, new com.thinklab.domain.exception.ApprovalPolicyNotConfiguredException("ECAB")),
+                HttpStatus.UNPROCESSABLE_ENTITY, "ERR-CHG-00422");
+        assertTrue(body.get("detail").toString().contains("ECAB"));
+        Map<String, Object> denied = assertProblem(exceptionHandler.handle(request, new com.thinklab.domain.exception.ApprovalSettingsNotPermittedException("OPERATOR")),
+                HttpStatus.FORBIDDEN, "ERR-CHG-00403");
+        assertTrue(denied.get("detail").toString().contains("OPERATOR"));
+    }
+
+    @Test
     @DisplayName("ChangeRequestNotFoundException maps to 404 with ERR-CHG-00404")
     void notFound() {
         UUID id = UUID.randomUUID();

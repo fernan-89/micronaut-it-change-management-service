@@ -7,7 +7,6 @@ import com.thinklab.domain.model.FreezeOverridePolicy;
 import com.thinklab.domain.port.ApprovalServicePort;
 import com.thinklab.domain.port.OperationWindowServicePort;
 import com.thinklab.domain.repository.ChangeRequestRepository;
-import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,14 +28,14 @@ public class ScheduleChangeRequestUseCase {
     private final ChangeRequestRepository changeRequestRepository;
     private final OperationWindowServicePort operationWindowServicePort;
     private final ApprovalServicePort approvalServicePort;
-    private final UUID ecabPolicyId;
+    private final ApprovalPolicies approvalPolicies;
 
     public ScheduleChangeRequestUseCase(ChangeRequestRepository changeRequestRepository, OperationWindowServicePort operationWindowServicePort,
-                                        ApprovalServicePort approvalServicePort, @Value("${thinklab.change-management.ecab-policy-id}") String ecabPolicyId) {
+                                        ApprovalServicePort approvalServicePort, ApprovalPolicies approvalPolicies) {
         this.changeRequestRepository = changeRequestRepository;
         this.operationWindowServicePort = operationWindowServicePort;
         this.approvalServicePort = approvalServicePort;
-        this.ecabPolicyId = ecabPolicyId == null || ecabPolicyId.isBlank() ? null : UUID.fromString(ecabPolicyId);
+        this.approvalPolicies = approvalPolicies;
     }
 
     /**
@@ -51,16 +50,15 @@ public class ScheduleChangeRequestUseCase {
         }
         // Below ADMIN a freeze can still be waived by someone who sits on the ECAB (ADR-036): they are the people the tenant already
         // trusts to approve an emergency, so no role of its own is needed.
-        return isEcabMember(executor).flatMap(member -> member ? reserve(id, organisationId, request, executor) : Mono.error(new FreezeOverrideNotPermittedException(role)));
+        return isEcabMember(organisationId, executor).flatMap(member -> member ? reserve(id, organisationId, request, executor) : Mono.error(new FreezeOverrideNotPermittedException(role)));
     }
 
     /** Fail-closed: this is a privilege, so when the ECAB cannot be read (not configured, service down) the answer is no. */
-    private Mono<Boolean> isEcabMember(String executor) {
-        if (ecabPolicyId == null) {
-            return Mono.just(false);
-        }
-        return approvalServicePort.approversOfPolicy(ecabPolicyId)
+    private Mono<Boolean> isEcabMember(UUID organisationId, String executor) {
+        return approvalPolicies.ecabPolicy(organisationId)
+                .flatMap(ecabPolicyId -> approvalServicePort.approversOfPolicy(organisationId, ecabPolicyId))
                 .map(approvers -> approvers.stream().anyMatch(approver -> approver.toString().equals(executor)))
+                .defaultIfEmpty(false)
                 .onErrorResume(failure -> {
                     log.warn("[USE CASE] Could not read the ECAB approvers to check a freeze override; refusing it. Reason: {}", failure.getMessage());
                     return Mono.just(false);

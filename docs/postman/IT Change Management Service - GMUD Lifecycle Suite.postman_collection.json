@@ -2112,6 +2112,231 @@
           }
         }
       ]
+    },
+    {
+      "name": "05. Approval Settings (ADR-039)",
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('settingsTenantId', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error_code is ERR-CHG-00422', () => pm.expect(pm.response.json().error_code).to.eql('ERR-CHG-00422'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "01. A tenant without settings has none (422, ERR-CHG-00422)",
+          "request": {
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{settingsTenantId}}"
+              }
+            ],
+            "method": "GET",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-change-management",
+                "v1",
+                "approval-settings",
+                "retrieve"
+              ],
+              "raw": "{{base_url}}/it-change-management/v1/approval-settings/retrieve"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "02. Setting them needs ADMIN or SERVICE: an OPERATOR is refused (403)",
+          "request": {
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{settingsTenantId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              },
+              {
+                "key": "X-Role",
+                "value": "OPERATOR"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-change-management",
+                "v1",
+                "approval-settings",
+                "update"
+              ],
+              "raw": "{{base_url}}/it-change-management/v1/approval-settings/update"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cabPolicyId\": \"11111111-1111-4111-8111-111111111111\",\n  \"ecabPolicyId\": \"22222222-2222-4222-8222-222222222222\"\n}"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "03. A policy that does not exist in the tenant is refused (400), nothing is stored",
+          "request": {
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{settingsTenantId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-change-management",
+                "v1",
+                "approval-settings",
+                "update"
+              ],
+              "raw": "{{base_url}}/it-change-management/v1/approval-settings/update"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cabPolicyId\": \"11111111-1111-4111-8111-111111111111\",\n  \"ecabPolicyId\": \"22222222-2222-4222-8222-222222222222\"\n}"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "04. Both policy ids are required (400)",
+          "request": {
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{settingsTenantId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-change-management",
+                "v1",
+                "approval-settings",
+                "update"
+              ],
+              "raw": "{{base_url}}/it-change-management/v1/approval-settings/update"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cabPolicyId\": \"11111111-1111-4111-8111-111111111111\"\n}"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "05. The tenant is required (400)",
+          "request": {
+            "header": [],
+            "method": "GET",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-change-management",
+                "v1",
+                "approval-settings",
+                "retrieve"
+              ],
+              "raw": "{{base_url}}/it-change-management/v1/approval-settings/retrieve"
+            }
+          }
+        }
+      ]
     }
   ],
   "variable": [

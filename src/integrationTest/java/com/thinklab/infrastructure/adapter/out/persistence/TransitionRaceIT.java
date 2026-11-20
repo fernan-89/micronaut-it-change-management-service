@@ -75,8 +75,13 @@ class TransitionRaceIT implements TestPropertyProvider {
         }
 
         @Override
-        public Mono<Set<UUID>> approversOfPolicy(UUID policyId) {
+        public Mono<Set<UUID>> approversOfPolicy(UUID organisationId, UUID policyId) {
             return Mono.just(Set.of());
+        }
+
+        @Override
+        public Mono<Boolean> policyExists(UUID organisationId, UUID policyId) {
+            return Mono.just(true);
         }
     }
 

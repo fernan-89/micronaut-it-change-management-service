@@ -31,7 +31,10 @@ public interface ApprovalServicePort {
      * BIAN Behavior Qualifier {@code policy/retrieve} on workflow-approval-service. Everyone who is an approver of ANY stage of the
      * policy (a chain has several stages, a one-stage policy just one). Used to decide whether an executor sits on the ECAB.
      */
-    Mono<Set<UUID>> approversOfPolicy(UUID policyId);
+    Mono<Set<UUID>> approversOfPolicy(UUID organisationId, UUID policyId);
+
+    /** Whether the policy exists in the tenant at workflow-approval (a 404 is {@code false}); used before a tenant's CAB/ECAB ids are stored (ADR-039). */
+    Mono<Boolean> policyExists(UUID organisationId, UUID policyId);
 
     enum DecisionOutcome { APPROVE, REJECT }
 

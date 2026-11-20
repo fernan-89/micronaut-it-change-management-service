@@ -90,10 +90,10 @@ public class WorkflowApprovalServiceAdapter implements ApprovalServicePort {
     record CaptureDecisionApiRequest(String outcome, String comment) {}
 
     @Override
-    public Mono<Set<UUID>> approversOfPolicy(UUID policyId) {
+    public Mono<Set<UUID>> approversOfPolicy(UUID organisationId, UUID policyId) {
         log.debug("[INTEGRATION] Reading the approvers of policy {} on workflow-approval-service", policyId);
 
-        return apiClient.retrievePolicy(policyId)
+        return apiClient.retrievePolicy(policyId, organisationId.toString())
                 .map(policy -> {
                     Set<UUID> approvers = new HashSet<>(policy.eligibleApproverIds() == null ? List.<UUID>of() : policy.eligibleApproverIds());
                     if (policy.stages() != null) {
@@ -101,6 +101,16 @@ public class WorkflowApprovalServiceAdapter implements ApprovalServicePort {
                     }
                     return Set.copyOf(approvers);
                 })
+                .onErrorMap(error -> new IllegalStateException("Dependency Failure: Workflow Approval Service is currently unavailable", error));
+    }
+
+    @Override
+    public Mono<Boolean> policyExists(UUID organisationId, UUID policyId) {
+        log.debug("[INTEGRATION] Checking that ApprovalPolicy {} exists in the tenant", policyId);
+
+        return apiClient.retrievePolicy(policyId, organisationId.toString())
+                .map(policy -> true)
+                .onErrorResume(error -> error instanceof HttpClientResponseException http && http.getStatus() == HttpStatus.NOT_FOUND, error -> Mono.just(false))
                 .onErrorMap(error -> new IllegalStateException("Dependency Failure: Workflow Approval Service is currently unavailable", error));
     }
 
@@ -133,7 +143,7 @@ interface WorkflowApprovalApiClient {
     );
 
     @Get("/policy/{id}/retrieve")
-    Mono<WorkflowApprovalServiceAdapter.PolicyApiResponse> retrievePolicy(@PathVariable UUID id);
+    Mono<WorkflowApprovalServiceAdapter.PolicyApiResponse> retrievePolicy(@PathVariable UUID id, @Header("X-Tenant-Id") String tenantId);
 
     @Put("/{id}/decision/capture")
     Mono<WorkflowApprovalServiceAdapter.ApprovalRequestApiResponse> captureDecision(
