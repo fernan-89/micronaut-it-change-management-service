@@ -68,9 +68,12 @@ class ChangeRequestIntegrationUseCaseTest {
         return cr;
     }
 
-    /** The environment pair of ADR-031 (per-tenant switch off): what these tests were written against. */
+    /** The approval settings of whichever tenant asks (ADR-039): this CAB and this ECAB, or none at all when cab is null. */
     private ApprovalPolicies policies(String cab, String ecab) {
-        return new ApprovalPolicies(org.mockito.Mockito.mock(com.thinklab.domain.repository.ApprovalSettingsRepository.class), false, cab, ecab);
+        com.thinklab.domain.repository.ApprovalSettingsRepository settings = org.mockito.Mockito.mock(com.thinklab.domain.repository.ApprovalSettingsRepository.class);
+        lenient().when(settings.findByOrganisationId(any())).thenAnswer(invocation -> cab == null ? Mono.empty()
+                : Mono.just(new com.thinklab.domain.model.ApprovalSettings(invocation.getArgument(0), UUID.fromString(cab), UUID.fromString(ecab), Instant.now(), EXECUTOR)));
+        return new ApprovalPolicies(settings);
     }
 
     // --- RouteForApprovalUseCase ---
@@ -127,14 +130,14 @@ class ChangeRequestIntegrationUseCaseTest {
     }
 
     @Test
-    @DisplayName("routeForApproval: a missing policy configuration (blank or null) surfaces a dependency-failure error")
+    @DisplayName("routeForApproval: a tenant without approval settings is refused with the not-configured error, for a NORMAL and for an EMERGENCY change")
     void routeForApprovalMissingPolicyConfig() {
         ChangeRequest blank = assessedChangeRequest(ChangeType.NORMAL);
         when(changeRequestRepository.findById(blank.getId(), blank.getOrganisationId())).thenReturn(Mono.just(blank));
-        RouteForApprovalUseCase blankConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies("", ""));
+        RouteForApprovalUseCase blankConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(null, null));
 
         StepVerifier.create(blankConfigured.execute(blank.getId(), blank.getOrganisationId(), EXECUTOR))
-                .expectError(IllegalStateException.class)
+                .expectError(com.thinklab.domain.exception.ApprovalPolicyNotConfiguredException.class)
                 .verify();
 
         ChangeRequest nullConfig = assessedChangeRequest(ChangeType.EMERGENCY);
@@ -142,7 +145,7 @@ class ChangeRequestIntegrationUseCaseTest {
         RouteForApprovalUseCase nullConfigured = new RouteForApprovalUseCase(changeRequestRepository, approvalServicePort, policies(null, null));
 
         StepVerifier.create(nullConfigured.execute(nullConfig.getId(), nullConfig.getOrganisationId(), EXECUTOR))
-                .expectError(IllegalStateException.class)
+                .expectError(com.thinklab.domain.exception.ApprovalPolicyNotConfiguredException.class)
                 .verify();
     }
 
@@ -359,10 +362,8 @@ class ChangeRequestIntegrationUseCaseTest {
         when(approvalServicePort.approversOfPolicy(organisationId, UUID.fromString(ECAB_POLICY))).thenReturn(Mono.error(new IllegalStateException("down")));
         StepVerifier.create(configured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
 
-        for (String blank : new String[]{null, " "}) {
-            ScheduleChangeRequestUseCase unconfigured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(CAB_POLICY, blank));
-            StepVerifier.create(unconfigured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
-        }
+        ScheduleChangeRequestUseCase unconfigured = new ScheduleChangeRequestUseCase(changeRequestRepository, operationWindowServicePort, approvalServicePort, policies(null, null));
+        StepVerifier.create(unconfigured.execute(UUID.randomUUID(), organisationId, override, UUID.randomUUID().toString(), "OPERATOR")).expectError(FreezeOverrideNotPermittedException.class).verify();
         verifyNoInteractions(changeRequestRepository, operationWindowServicePort);
     }
 

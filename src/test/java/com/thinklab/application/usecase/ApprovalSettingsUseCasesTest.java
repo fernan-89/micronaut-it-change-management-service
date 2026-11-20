@@ -28,9 +28,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ApprovalSettingsUseCasesTest {
 
-    private static final String SHARED_CAB = "11111111-1111-1111-1111-111111111111";
-    private static final String SHARED_ECAB = "22222222-2222-2222-2222-222222222222";
-
     @Mock private ApprovalSettingsRepository settings;
     @Mock private ApprovalServicePort approvals;
 
@@ -92,9 +89,9 @@ class ApprovalSettingsUseCasesTest {
     }
 
     @Test
-    @DisplayName("per-tenant mode: the CAB or ECAB of the change's own tenant decides it; a tenant without settings is refused and never borrows another's")
+    @DisplayName("the CAB or ECAB of the change's own tenant decides it; a tenant without settings is refused and never borrows another's")
     void perTenantPolicies() {
-        ApprovalPolicies policies = new ApprovalPolicies(settings, true, SHARED_CAB, SHARED_ECAB);
+        ApprovalPolicies policies = new ApprovalPolicies(settings);
         when(settings.findByOrganisationId(tenant)).thenReturn(Mono.just(stored()));
         UUID other = UUID.randomUUID();
         when(settings.findByOrganisationId(other)).thenReturn(Mono.empty());
@@ -109,17 +106,4 @@ class ApprovalSettingsUseCasesTest {
         StepVerifier.create(policies.ecabPolicy(other)).verifyComplete();
     }
 
-    @Test
-    @DisplayName("shared mode (the switch off): the environment pair of ADR-031 decides for every tenant, and a missing one is a dependency failure, as before")
-    void sharedPolicies() {
-        ApprovalPolicies policies = new ApprovalPolicies(settings, false, SHARED_CAB, SHARED_ECAB);
-        StepVerifier.create(policies.decidingPolicy(tenant, ChangeType.NORMAL)).expectNext(UUID.fromString(SHARED_CAB)).verifyComplete();
-        StepVerifier.create(policies.decidingPolicy(tenant, ChangeType.EMERGENCY)).expectNext(UUID.fromString(SHARED_ECAB)).verifyComplete();
-        StepVerifier.create(policies.ecabPolicy(tenant)).expectNext(UUID.fromString(SHARED_ECAB)).verifyComplete();
-
-        ApprovalPolicies none = new ApprovalPolicies(settings, false, "", null);
-        StepVerifier.create(none.decidingPolicy(tenant, ChangeType.NORMAL)).expectError(IllegalStateException.class).verify();
-        StepVerifier.create(none.ecabPolicy(tenant)).verifyComplete();
-        verify(settings, never()).findByOrganisationId(any());
-    }
 }

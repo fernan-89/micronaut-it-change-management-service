@@ -12,6 +12,8 @@ import com.thinklab.domain.model.ChangeRequest.ImpactLevel;
 import com.thinklab.domain.model.ChangeRequest.RiskLevel;
 import com.thinklab.domain.port.ApprovalServicePort;
 import com.thinklab.domain.port.OperationWindowServicePort;
+import com.thinklab.domain.model.ApprovalSettings;
+import com.thinklab.domain.repository.ApprovalSettingsRepository;
 import com.thinklab.domain.repository.ChangeRequestRepository;
 import com.thinklab.infrastructure.adapter.out.integration.operationwindow.OperationWindowServiceAdapter;
 import com.thinklab.infrastructure.adapter.out.integration.workflowapproval.WorkflowApprovalServiceAdapter;
@@ -48,12 +50,11 @@ class TransitionRaceIT implements TestPropertyProvider {
 
     private static final String DATABASE = "it_change_management_race_it";
     private static final String EXECUTOR = "op-1";
-    private static final String CAB = "11111111-2222-4333-8444-555555555555";
+    private static final UUID CAB = UUID.fromString("11111111-2222-4333-8444-555555555555");
 
     @Override
     public Map<String, String> getProperties() {
-        return Map.of("mongodb.uri", MongoContainer.uri(DATABASE),
-                "thinklab.change-management.cab-policy-id", CAB, "thinklab.change-management.ecab-policy-id", CAB);
+        return Map.of("mongodb.uri", MongoContainer.uri(DATABASE));
     }
 
     @Singleton
@@ -101,6 +102,7 @@ class TransitionRaceIT implements TestPropertyProvider {
     }
 
     @Inject ChangeRequestRepository repository;
+    @Inject ApprovalSettingsRepository approvalSettings;
     @Inject ControlChangeRequestUseCase control;
     @Inject RouteForApprovalUseCase route;
     @Inject ScheduleChangeRequestUseCase schedule;
@@ -110,6 +112,7 @@ class TransitionRaceIT implements TestPropertyProvider {
     private ChangeRequest draft() {
         ChangeRequest change = ChangeRequest.createNew(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "Race change", "d", ChangeType.NORMAL, Set.of(UUID.randomUUID()), null, EXECUTOR);
         repository.create(change).block();
+        approvalSettings.save(new ApprovalSettings(change.getOrganisationId(), CAB, CAB, Instant.now(), EXECUTOR)).block();
         return change;
     }
 
